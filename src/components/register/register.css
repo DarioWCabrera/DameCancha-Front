@@ -1,0 +1,734 @@
+/* =========================================================
+   REGISTER - DAMECANCHA
+   Diseño basado en el mockup con header, footer,
+   fondo de cancha, card azul y logos reales.
+========================================================= */
+
+.register-page,
+.register-page * {
+  box-sizing: border-box;
+}
+
+.register-page {
+  min-height: 100vh;
+  width: 100%;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #ffffff;
+
+  background-image:
+    linear-gradient(rgba(75, 95, 105, 0.46), rgba(75, 95, 105, 0.46)),
+    url("../inicio/backgroud1.png");
+
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+
+  display: flex;
+  flex-direction: column;
+}
+
+/* =========================================================
+   HEADER SUPERIOR BLANCO
+========================================================= */
+
+.register-header {
+  width: 100%;
+  min-height: 72px;
+  padding: 0 44px;
+  background: #ffffff;
+  color: #1f4ea6;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+  z-index: 10;
+}
+
+.register-header__logo {
+  height: 46px;
+  width: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.register-header__right {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  font-size: 16px;
+  font-weight: 800;
+  color: #1f4ea6;
+}
+
+.register-header__right span {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.register-header__right i {
+  font-size: 22px;
+}
+
+/* =========================================================
+   CONTENEDOR CENTRAL
+========================================================= */
+
+.register-container {
+  flex: 1;
+  width: 100%;
+  padding: 34px 16px 24px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* pisa Bootstrap vh-100 si quedó en el JSX viejo */
+.register-container.vh-100 {
+  height: auto !important;
+  min-height: auto !important;
+}
+
+/* =========================================================
+   CARD PRINCIPAL
+========================================================= */
+
+.card-custom {
+  width: min(100%, 900px);
+  max-width: 900px;
+
+  background:
+    radial-gradient(circle at top, rgba(22, 100, 230, 0.98), rgba(5, 62, 165, 0.98) 44%, rgba(3, 61, 161, 0.98));
+
+  color: #ffffff;
+  border-radius: 22px;
+  border: 1.5px solid rgba(190, 220, 255, 0.72);
+
+  box-shadow:
+    0 24px 55px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.card-custom .card-body {
+  padding: 28px 46px 26px;
+}
+
+/* =========================================================
+   TÍTULO Y LOGO SUPERIOR DE LA CARD
+========================================================= */
+
+.Titulo {
+  text-align: center;
+  margin-bottom: 22px;
+}
+
+.register-card-logo {
+  width: 86px;
+  height: 86px;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto 10px;
+}
+
+.Titulo h2,
+.titulo-principal {
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(30px, 3vw, 40px);
+  font-weight: 900;
+  letter-spacing: -0.6px;
+}
+
+.Titulo h6,
+.subtitulo-principal {
+  margin: 8px 0 0 !important;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* =========================================================
+   LABELS
+========================================================= */
+
+.card-custom .form-label {
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 800;
+  margin-bottom: 7px;
+}
+
+/* =========================================================
+   INPUTS
+========================================================= */
+
+.card-custom .form-control,
+.card-custom .form-select {
+  height: 50px;
+  min-height: 50px;
+
+  background: rgba(0, 44, 135, 0.36);
+  color: #ffffff;
+
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
+  border-radius: 8px;
+
+  font-size: 17px;
+  font-weight: 500;
+
+  padding: 0 46px 0 16px;
+  box-shadow: none;
+  outline: none;
+
+  transition: 0.2s ease;
+}
+
+.card-custom .form-control::placeholder,
+.card-custom .form-select::placeholder {
+  color: rgba(255, 255, 255, 0.66);
+}
+
+.card-custom .form-control:focus,
+.card-custom .form-select:focus {
+  background: rgba(0, 53, 155, 0.46);
+  color: #ffffff;
+  border-color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.13);
+}
+
+/* =========================================================
+   ÍCONOS DE INPUTS
+========================================================= */
+
+.position-relative {
+  position: relative;
+}
+
+.input-with-icon {
+  padding-right: 46px !important;
+}
+
+.icon-inside {
+  position: absolute;
+  right: 18px;
+  top: 68%;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.92);
+  pointer-events: none;
+  font-size: 1.15rem;
+  z-index: 2;
+}
+
+/* =========================================================
+   SECCIÓN CANCHAS / DEPORTES
+========================================================= */
+
+.card-canchas,
+.canchas-card,
+.card-custom .mt-4.mb-4 {
+  margin: 18px 0 20px !important;
+  padding: 18px 20px !important;
+
+  background: rgba(0, 36, 118, 0.32);
+  border: 1.5px solid rgba(255, 255, 255, 0.42);
+  border-radius: 10px;
+}
+
+.card-canchas h5,
+.canchas-card h5,
+.card-custom .mt-4.mb-4 h5 {
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 900;
+  margin: 0 0 14px !important;
+}
+
+.card-canchas .row,
+.canchas-card .row,
+.card-custom .mt-4.mb-4 .row {
+  row-gap: 8px;
+}
+
+.card-canchas .col-md-4,
+.canchas-card .col-md-4,
+.card-custom .mt-4.mb-4 .col-md-4 {
+  margin-bottom: 6px !important;
+}
+
+/* =========================================================
+   CHECKBOX
+========================================================= */
+
+.card-custom .form-check {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  min-height: 26px;
+}
+
+.card-custom .form-check-input {
+  width: 19px;
+  height: 19px;
+  min-width: 19px;
+
+  margin-top: 0;
+  margin-right: 11px;
+
+  background-color: transparent;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 4px;
+
+  cursor: pointer;
+  box-shadow: none;
+  transition: 0.2s ease;
+}
+
+.card-custom .form-check-input:hover {
+  transform: scale(1.07);
+  border-color: #ffffff;
+}
+
+.card-custom .form-check-input:checked {
+  background-color: #ffffff;
+  border-color: #ffffff;
+  background-image: none;
+}
+
+.card-custom .form-check-input:checked::after {
+  content: "✓";
+  display: grid;
+  place-items: center;
+  color: #0b55c7;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.card-custom .form-check-label {
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* =========================================================
+   INPUT FILE
+========================================================= */
+
+.card-custom input[type="file"].form-control {
+  height: 50px;
+  padding: 6px 10px;
+  line-height: 2.1;
+}
+
+.card-custom input[type="file"]::file-selector-button {
+  height: 36px;
+  padding: 0 16px;
+  margin-right: 14px;
+
+  border: none;
+  border-radius: 6px;
+
+  background: #ffffff;
+  color: #0b55c7;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.card-custom input[type="file"]::file-selector-button:hover {
+  background: #eaf2ff;
+}
+
+/* =========================================================
+   BOTONES
+========================================================= */
+
+.card-custom .btn {
+  min-height: 48px;
+  border-radius: 8px;
+
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  transition: 0.2s ease;
+}
+
+.card-custom .btn-primary {
+  background: #ffffff;
+  color: #0b55c7;
+  border: 2px solid #ffffff;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.14);
+}
+
+.card-custom .btn-primary:hover {
+  background: transparent;
+  color: #ffffff;
+  border-color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.card-custom .btn-outline-light,
+.card-custom .btn-secondary,
+.card-custom .btn-outline-primary {
+  background: transparent;
+  color: #ffffff;
+  border: 1.5px solid rgba(255, 255, 255, 0.84);
+  box-shadow: none;
+}
+
+.card-custom .btn-outline-light:hover,
+.card-custom .btn-secondary:hover,
+.card-custom .btn-outline-primary:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  border-color: #ffffff;
+  transform: translateY(-1px);
+}
+
+/* =========================================================
+   FOOTER INTERNO DE LA CARD
+========================================================= */
+
+.register-card-footer {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.34);
+  text-align: center;
+}
+
+.register-card-footer h5 {
+  margin: 0 0 10px;
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.register-brand-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.register-brand-footer img {
+  width: 220px;
+  max-width: 45%;
+  height: auto;
+  object-fit: contain;
+  display: block;
+}
+
+/* Compatibilidad con el h5 viejo si todavía quedó en JSX */
+.card-custom h5.text-center img {
+  max-width: 220px;
+  height: auto;
+}
+
+/* =========================================================
+   FOOTER DE PÁGINA
+========================================================= */
+
+.register-footer {
+  min-height: 58px;
+  width: 100%;
+  padding: 0 44px;
+
+  background: #ffffff;
+  color: #1f4ea6;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.08);
+}
+
+/* =========================================================
+   ESPACIADOS BOOTSTRAP
+========================================================= */
+
+.card-custom .row {
+  row-gap: 14px;
+}
+
+.card-custom .mb-3 {
+  margin-bottom: 15px !important;
+}
+
+.card-custom .mb-4 {
+  margin-bottom: 18px !important;
+}
+
+.card-custom .mt-3 {
+  margin-top: 13px !important;
+}
+
+.card-custom a {
+  color: #ffffff;
+  font-weight: 800;
+  text-decoration: underline;
+}
+
+.card-custom a:hover {
+  color: #dbeaff;
+}
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 992px) {
+  .register-header {
+    padding: 0 22px;
+  }
+
+  .register-container {
+    align-items: flex-start;
+    padding: 28px 14px 22px;
+  }
+
+  .card-custom {
+    width: min(100%, 760px);
+  }
+
+  .card-custom .card-body {
+    padding: 26px 28px 24px;
+  }
+
+  .register-footer {
+    padding: 14px 22px;
+    gap: 10px;
+    flex-direction: column;
+    text-align: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .register-header {
+    min-height: auto;
+    padding: 12px 16px;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .register-header__logo {
+    height: 42px;
+  }
+
+  .register-header__right {
+    font-size: 13px;
+  }
+
+  .register-container {
+    padding: 18px 10px;
+  }
+
+  .card-custom {
+    border-radius: 18px;
+  }
+
+  .card-custom .card-body {
+    padding: 22px 16px 20px;
+  }
+
+  .register-card-logo {
+    width: 68px;
+    height: 68px;
+  }
+
+  .Titulo h2,
+  .titulo-principal {
+    font-size: 27px;
+  }
+
+  .Titulo h6,
+  .subtitulo-principal {
+    font-size: 13px;
+  }
+
+  .card-custom .form-control,
+  .card-custom .form-select {
+    height: 46px;
+    min-height: 46px;
+    font-size: 15px;
+  }
+
+  .card-canchas,
+  .canchas-card,
+  .card-custom .mt-4.mb-4 {
+    padding: 15px !important;
+  }
+
+  .register-brand-footer {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .register-brand-footer img {
+    max-width: 230px;
+    width: 75%;
+  }
+}
+/* =========================================================
+   BLOQUE SUBIDA DE LOGO - REGISTER CLUB
+========================================================= */
+
+.upload-box {
+  border: 1.5px dashed rgba(255, 255, 255, 0.38);
+  border-radius: 10px;
+  background: rgba(0, 36, 118, 0.22);
+  padding: 14px 16px;
+  position: relative;
+}
+
+.upload-box__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 12px;
+}
+
+.upload-box__left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.upload-box__icon {
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.35rem;
+}
+
+.upload-box__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.upload-box__text strong {
+  color: white;
+  font-size: 0.98rem;
+  font-weight: 800;
+}
+
+.upload-box__text span {
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.upload-box__info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.upload-box__info span {
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.86rem;
+  font-weight: 500;
+}
+
+.upload-box__bottom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.upload-box__button {
+  background: white;
+  color: #0b55c7;
+  border-radius: 7px;
+  padding: 9px 16px;
+  font-weight: 800;
+  font-size: 0.95rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  white-space: nowrap;
+  transition: 0.2s ease;
+}
+
+.upload-box__button:hover {
+  background: #edf4ff;
+  color: #0b55c7;
+}
+
+.upload-box__filename {
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  opacity: 0.95;
+  min-width: 0;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.upload-box__input {
+  display: none;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .upload-box {
+    padding: 12px;
+  }
+
+  .upload-box__top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .upload-box__info {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .upload-box__bottom {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .upload-box__filename {
+    width: 100%;
+  }
+}

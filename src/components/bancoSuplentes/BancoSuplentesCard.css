@@ -1,0 +1,89 @@
+.bsc-card {
+  margin-bottom: 13px;
+  padding: 14px;
+  border: 1px solid rgba(8, 123, 255, 0.22);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 92% 10%, rgba(255, 184, 0, 0.22), transparent 34%),
+    linear-gradient(135deg, #eef6ff, #ffffff);
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 10px;
+  box-shadow: 0 10px 24px rgba(7, 31, 77, 0.08);
+}
+
+.bsc-card__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #087bff, #005de0);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+}
+
+.bsc-card__content {
+  min-width: 0;
+}
+
+.bsc-card__content > span {
+  color: #087bff;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.bsc-card h3 {
+  margin: 3px 0 4px;
+  color: #071f4d;
+  font-size: 16px;
+}
+
+.bsc-card p {
+  margin: 0;
+  color: #39527a;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.bsc-card > button {
+  grid-column: 1 / -1;
+  min-height: 34px;
+  border: 0;
+  border-radius: 9px;
+  background: #087bff;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.bsc-card > button i {
+  margin-left: 7px;
+}
+
+@media (max-width: 900px) {
+  .bsc-card {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .bsc-card > button {
+    grid-column: auto;
+    min-width: 110px;
+    padding: 0 12px;
+  }
+}
+
+@media (max-width: 520px) {
+  .bsc-card {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .bsc-card > button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}

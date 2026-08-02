@@ -1,0 +1,447 @@
+/* =========================================================
+   CONTENEDOR GENERAL DEL LOGIN
+   Mantiene el fondo original de cancha detrás del formulario.
+   También deja espacio para los banners laterales del Layout.
+========================================================= */
+
+.login-page-container {
+  position: relative;
+  min-height: calc(100vh - 40px);
+  padding: 40px 180px;
+  box-sizing: border-box;
+
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+
+  background-image:
+    linear-gradient(rgba(120, 145, 155, 0.45), rgba(120, 145, 155, 0.45)),
+    url('src/components/inicio/backgroud1.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+
+/* =========================================================
+   FORMULARIO DE LOGIN
+   Card central donde el usuario ingresa sus credenciales.
+========================================================= */
+
+.login-container {
+  width: 100%;
+  max-width: 430px;
+  margin-top: 28px;
+  padding: 34px 30px 30px;
+
+  background: rgba(255, 255, 255, 0.96);
+  border-radius: 26px;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+
+  box-shadow:
+    0 24px 55px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+
+  position: relative;
+  z-index: 5;
+  overflow: hidden;
+}
+
+.login-container::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 12%;
+  width: 76%;
+  height: 4px;
+  border-radius: 0 0 999px 999px;
+  background: linear-gradient(90deg, transparent, #0d6efd, transparent);
+}
+
+
+/* =========================================================
+   ICONO SUPERIOR
+========================================================= */
+
+.login-icon-header {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 14px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #ffffff;
+  font-size: 24px;
+
+  background: linear-gradient(135deg, #0057ff, #00b7ff);
+  border-radius: 50%;
+
+  box-shadow:
+    0 12px 24px rgba(13, 110, 253, 0.32),
+    0 0 0 8px rgba(13, 110, 253, 0.08);
+}
+
+
+/* =========================================================
+   TÍTULO DEL LOGIN
+========================================================= */
+
+.login-title {
+  text-align: center;
+  color: #0d6efd;
+  margin: 0 0 32px;
+
+  font-size: 31px;
+  font-weight: 900;
+  letter-spacing: -0.8px;
+
+  text-shadow: 0 8px 18px rgba(13, 110, 253, 0.18);
+  position: relative;
+}
+
+.login-title::after {
+  content: "";
+  display: block;
+  width: 58px;
+  height: 3px;
+  margin: 12px auto 0;
+
+  border-radius: 999px;
+  background: linear-gradient(90deg, #0057ff, #00c2ff);
+}
+
+
+/* =========================================================
+   FORMULARIO Y CAMPOS
+========================================================= */
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.login-form-group {
+  margin-bottom: 22px;
+}
+
+.login-label {
+  display: block;
+  margin-bottom: 8px;
+
+  font-weight: 800;
+  color: #1d2b4f;
+  font-size: 15px;
+}
+
+.login-input-wrapper {
+  width: 100%;
+  position: relative;
+}
+
+.login-input-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+
+  font-size: 18px;
+  color: #0d6efd;
+  pointer-events: none;
+}
+
+.login-input {
+  width: 100%;
+  padding: 15px 16px 15px 48px;
+
+  border: 1.5px solid #d5e1f3;
+  border-radius: 14px;
+
+  font-size: 15px;
+  box-sizing: border-box;
+
+  color: #1d2b4f;
+  background-color: #ffffff;
+
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.2s ease;
+}
+
+.login-input::placeholder {
+  color: #8a96aa;
+}
+
+.login-input:focus {
+  outline: none;
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 4px rgba(13, 110, 253, 0.14);
+  transform: translateY(-1px);
+}
+
+/* =========================================================
+   ICONO MOSTRAR/OCULTAR CONTRASEÑA (OJITO)
+========================================================= */
+
+.login-toggle-password-icon {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+
+  font-size: 18px;
+  color: #6b7280;
+
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.login-toggle-password-icon:hover {
+  color: #0d6efd;
+}
+
+.login-input-password {
+  padding-right: 48px;
+}
+
+
+/* =========================================================
+   BOTÓN PRINCIPAL DE INGRESO
+========================================================= */
+
+.login-submit-button {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  background: linear-gradient(135deg, #0057ff, #00a6ff);
+  color: #ffffff;
+
+  border: none;
+  padding: 15px 16px;
+  border-radius: 14px;
+
+  font-size: 16px;
+  font-weight: 900;
+
+  cursor: pointer;
+  box-shadow: 0 14px 26px rgba(0, 123, 255, 0.34);
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
+
+  margin-bottom: 26px;
+}
+
+.login-submit-button i {
+  font-size: 18px;
+}
+
+.login-submit-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 34px rgba(0, 123, 255, 0.42);
+  filter: brightness(1.04);
+}
+
+.login-submit-button:active {
+  transform: translateY(0);
+  box-shadow: 0 10px 20px rgba(0, 123, 255, 0.3);
+}
+
+
+/* =========================================================
+   MENSAJE DE ERROR
+========================================================= */
+
+.login-error {
+  color: #b42318;
+  background-color: #fff0f0;
+  border: 1px solid #ffc9c9;
+
+  padding: 12px 14px;
+  border-radius: 12px;
+
+  text-align: center;
+  margin: 0 0 20px;
+
+  font-size: 14px;
+  font-weight: 700;
+}
+
+
+/* =========================================================
+   BOTONES DE REGISTRO
+   Accesos para registrar usuario o club.
+========================================================= */
+
+.login-register-container {
+  text-align: center;
+}
+
+.login-register-text {
+  margin: 0 0 18px;
+  color: #6b7280;
+  font-size: 15px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.login-register-text::before,
+.login-register-text::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: #d7deea;
+}
+
+.login-register-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.login-register-user-button,
+.login-register-club-button {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  padding: 14px 16px;
+  border-radius: 14px;
+
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+
+  font-weight: 900;
+  color: #ffffff;
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
+}
+
+.login-register-user-button i,
+.login-register-club-button i {
+  font-size: 18px;
+}
+
+.login-register-user-button {
+  background: linear-gradient(135deg, #20b34b, #2dd866);
+  box-shadow: 0 12px 24px rgba(40, 167, 69, 0.28);
+}
+
+.login-register-user-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 30px rgba(40, 167, 69, 0.36);
+  filter: brightness(1.03);
+}
+
+.login-register-club-button {
+  background: linear-gradient(135deg, #00aeea, #00d4ff);
+  box-shadow: 0 12px 24px rgba(0, 191, 255, 0.28);
+}
+
+.login-register-club-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 30px rgba(0, 191, 255, 0.38);
+  filter: brightness(1.03);
+}
+
+.login-register-user-button:active,
+.login-register-club-button:active {
+  transform: translateY(0);
+}
+
+
+/* =========================================================
+   BANNERS LATERALES
+   Se dejan por compatibilidad si Layout o Login los renderizan.
+========================================================= */
+
+.banner-izquierda {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  z-index: 100;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.banner-derecha {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  z-index: 100;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+/* =========================================================
+   RESPONSIVE
+   En pantallas chicas se ocultan banners y el formulario
+   ocupa casi todo el ancho disponible.
+========================================================= */
+
+@media (max-width: 768px) {
+  .login-page-container {
+    min-height: calc(100vh - 40px);
+    padding: 24px 14px;
+    align-items: flex-start;
+  }
+
+  .login-container {
+    max-width: 100%;
+    margin-top: 18px;
+    padding: 30px 24px;
+    border-radius: 22px;
+  }
+
+  .login-title {
+    font-size: 28px;
+    margin-bottom: 30px;
+  }
+
+  .login-icon-header {
+    width: 48px;
+    height: 48px;
+    font-size: 22px;
+  }
+
+  .login-input {
+    padding: 14px 14px 14px 46px;
+    font-size: 15px;
+  }
+
+  .login-submit-button,
+  .login-register-user-button,
+  .login-register-club-button {
+    padding: 14px;
+  }
+
+  .banner-izquierda,
+  .banner-derecha {
+    display: none;
+  }
+}

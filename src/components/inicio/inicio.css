@@ -1,0 +1,914 @@
+/*
+  Página inicial de DameCancha.
+  Landing principal con fondo de estadio, CTA para usuario/dueño
+  y accesos rápidos por deporte.
+*/
+
+* {
+  box-sizing: border-box;
+}
+
+.inicio-page {
+  min-height: 100vh;
+  width: 100%;
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  color: white;
+  font-family: "Inter", "Segoe UI", Arial, sans-serif;
+}
+
+/*
+  Capa oscura sobre el fondo.
+  La hacemos más liviana para que el estadio se vea.
+*/
+.inicio-overlay {
+  min-height: 100vh;
+  padding: 24px 8% 26px;
+  background:
+    linear-gradient(180deg,
+      rgba(3, 18, 40, 0.70) 0%,
+      rgba(7, 38, 70, 0.52) 45%,
+      rgba(5, 58, 35, 0.58) 100%);
+}
+
+/* RESET DE BOTONES CLICKEABLES */
+
+.inicio-logo-btn,
+.inicio-badge,
+.inicio-footer,
+.inicio-benefit,
+.inicio-nav button {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+  font: inherit;
+  color: inherit;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+/* HEADER */
+
+.inicio-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 26px;
+  margin-bottom: 28px;
+}
+
+.inicio-logo-btn {
+  display: flex;
+  align-items: center;
+}
+
+.inicio-logo {
+  width: 170px;
+  max-width: 24vw;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.45));
+}
+.inicio-nav {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.inicio-nav button {
+  color: white;
+  font-size: 15px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: 0.2s ease;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+.inicio-nav button:hover {
+  color: #168bff;
+  transform: translateY(-2px);
+}
+
+.inicio-nav .inicio-login-btn {
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+  padding: 10px 23px;
+  border-radius: 999px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.inicio-nav .inicio-login-btn:hover {
+  background: white;
+  color: #0b66d8;
+}
+
+/* HERO */
+
+.inicio-hero {
+  max-width: 1030px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.inicio-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 24px;
+  margin-bottom: 18px;
+  border-radius: 999px;
+  border: 1px solid #168bff;
+  background: rgba(0, 84, 180, 0.38);
+  color: white;
+  font-size: 14px;
+  font-weight: 950;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 0 24px rgba(0, 132, 255, 0.25);
+}
+
+.inicio-badge:hover {
+  background: rgba(0, 115, 230, 0.55);
+  transform: translateY(-2px);
+}
+
+.inicio-title {
+  margin: 0;
+  font-size: clamp(48px, 7vw, 96px);
+  line-height: 0.95;
+  font-weight: 950;
+  letter-spacing: -3px;
+  text-shadow: 0 8px 25px rgba(0, 0, 0, 0.55);
+}
+
+.inicio-title span {
+  display: block;
+  color: #0d8cff;
+}
+
+.inicio-description {
+  max-width: 760px;
+  margin: 24px auto 12px;
+  font-size: 21px;
+  line-height: 1.35;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 3px 12px rgba(0, 0, 0, 0.35);
+}
+
+.inicio-highlight {
+  margin: 20px 0 27px;
+  font-size: 22px;
+  font-weight: 950;
+  text-shadow: 0 3px 12px rgba(0, 0, 0, 0.35);
+}
+
+.inicio-highlight strong {
+  color: #168bff;
+}
+
+/* TARJETAS DE ACCIÓN */
+
+.inicio-actions {
+  max-width: 900px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 18px;
+}
+
+.inicio-action-card {
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  align-items: center;
+  gap: 18px;
+  padding: 27px;
+  border-radius: 24px;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.inicio-action-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 22px 45px rgba(0, 0, 0, 0.42);
+}
+
+.inicio-action-card-primary {
+  background: linear-gradient(135deg, #0788ff, #0067d8);
+}
+
+.inicio-action-card-secondary {
+  background: rgba(0, 26, 65, 0.85);
+}
+
+.inicio-card-icon {
+  width: 72px;
+  height: 72px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 34px;
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+}
+
+.inicio-card-content h2 {
+  margin: 0 0 6px;
+  font-size: 27px;
+}
+
+.inicio-card-content p {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.25;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.inicio-card-btn {
+  grid-column: 1 / -1;
+  width: 100%;
+  border: none;
+  border-radius: 14px;
+  padding: 15px 20px;
+  font-size: 18px;
+  font-weight: 950;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.inicio-card-btn-light {
+  background: white;
+  color: #0075ee;
+}
+
+.inicio-card-btn-blue {
+  background: #0788ff;
+  color: white;
+}
+
+.inicio-card-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.3);
+}
+
+/* BENEFICIOS RÁPIDOS */
+
+.inicio-benefits {
+  max-width: 1220px;
+  margin: 24px auto 18px;
+  padding: 18px 24px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 18px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.13);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  backdrop-filter: blur(9px);
+}
+
+.inicio-benefit {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  text-align: left;
+  color: inherit;
+}
+
+.inicio-benefit:hover {
+  transform: translateY(-2px);
+}
+
+.inicio-benefit span {
+  font-size: 34px;
+  flex: 0 0 auto;
+}
+
+.inicio-benefit h3 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.1;
+  color: white;
+}
+
+.inicio-benefit p {
+  margin: 5px 0 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+/* DEPORTES */
+
+.inicio-sports {
+  max-width: 1220px;
+  margin: 0 auto;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.13);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  backdrop-filter: blur(9px);
+}
+
+.inicio-sports h2 {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.05;
+  text-align: center;
+  font-weight: 950;
+  text-shadow: 0 3px 12px rgba(0, 0, 0, 0.35);
+}
+
+.inicio-sports-list {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  row-gap: 12px;
+  column-gap: 12px;
+}
+
+.inicio-sport-pill {
+  min-width: 145px;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 12px 17px;
+  border: none;
+  border-radius: 15px;
+  background: white;
+  color: #0b5ed7;
+  font-size: 16px;
+  font-weight: 950;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+  transition: 0.2s ease;
+}
+
+.inicio-sport-pill:hover {
+  transform: translateY(-4px) scale(1.03);
+  background: #0b84ff;
+  color: white;
+}
+
+.inicio-sport-icon {
+  width: 27px;
+  height: 27px;
+  object-fit: contain;
+}
+
+/* FOOTER */
+
+.inicio-footer {
+  display: block;
+  width: fit-content;
+  margin: 22px auto 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 850;
+  color: rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  padding: 0;
+  text-shadow: 0 3px 12px rgba(0, 0, 0, 0.35);
+}
+
+.inicio-footer:hover {
+  color: white;
+}
+
+/* MODAL INFORMATIVO */
+
+.inicio-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.68);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
+
+.inicio-modal {
+  position: relative;
+  width: min(980px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 42px 44px 36px;
+  border-radius: 26px;
+  color: #ffffff;
+  background:
+    linear-gradient(180deg, rgba(10, 52, 96, 0.98), rgba(5, 25, 53, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.58);
+}
+
+.inicio-modal-close {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-size: 34px;
+  line-height: 1;
+  font-weight: 800;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.inicio-modal-close:hover {
+  background: rgba(30, 144, 255, 0.25);
+  color: #ffffff;
+  transform: scale(1.06);
+}
+
+.inicio-modal-header {
+  max-width: 720px;
+  margin: 0 auto 34px;
+  text-align: center;
+}
+
+.inicio-modal-header h2 {
+  margin: 0 0 12px;
+  padding: 0 40px;
+  font-size: clamp(30px, 4vw, 44px);
+  line-height: 1.05;
+  font-weight: 950;
+  letter-spacing: -0.7px;
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.28);
+}
+
+.inicio-modal-header p {
+  margin: 0;
+  color: rgba(235, 245, 255, 0.9);
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.inicio-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(175px, 1fr));
+  justify-content: center;
+  align-items: stretch;
+  gap: 28px;
+  max-width: 760px;
+  margin: 0 auto 40px;
+}
+
+/* Modal Categorías: 4 tarjetas en una línea en escritorio */
+.inicio-modal-grid:has(.inicio-modal-card:nth-child(4):last-child) {
+  grid-template-columns: repeat(4, minmax(155px, 1fr));
+  max-width: 900px;
+  gap: 24px;
+}
+
+.inicio-modal-card {
+  min-height: 190px;
+  padding: 26px 22px;
+  border-radius: 20px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.105);
+  border: 1px solid rgba(255, 255, 255, 0.17);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.18);
+}
+
+.inicio-modal-card span {
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 18px;
+  border-radius: 16px;
+  background: rgba(30, 144, 255, 0.22);
+  font-size: 27px;
+}
+
+.inicio-modal-card h3 {
+  margin: 0 0 11px;
+  color: #ffffff;
+  font-size: 19px;
+  font-weight: 950;
+}
+
+.inicio-modal-card p {
+  margin: 0;
+  color: rgba(225, 239, 255, 0.88);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.inicio-modal-action {
+  width: 100%;
+  margin-top: 4px;
+  padding: 17px 20px;
+  border: none;
+  border-radius: 16px;
+  background: #0b8fff;
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 950;
+  cursor: pointer;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.25);
+  transition: 0.2s ease;
+}
+
+.inicio-modal-action:hover {
+  transform: translateY(-2px);
+  background: #087be0;
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.32);
+}
+
+body:has(.inicio-modal-backdrop) {
+  overflow: hidden;
+}
+
+@media (max-width: 900px) {
+  .inicio-modal {
+    width: min(760px, 100%);
+    padding: 36px 28px 28px;
+  }
+
+  .inicio-modal-grid,
+  .inicio-modal-grid:has(.inicio-modal-card:nth-child(4):last-child) {
+    grid-template-columns: repeat(2, minmax(190px, 1fr));
+    max-width: 560px;
+    gap: 22px;
+    margin-bottom: 34px;
+  }
+
+  .inicio-modal-grid:has(.inicio-modal-card:nth-child(3):last-child) {
+    grid-template-columns: repeat(3, minmax(150px, 1fr));
+    max-width: 680px;
+  }
+}
+
+@media (max-width: 700px) {
+  .inicio-modal-grid,
+  .inicio-modal-grid:has(.inicio-modal-card:nth-child(3):last-child),
+  .inicio-modal-grid:has(.inicio-modal-card:nth-child(4):last-child) {
+    grid-template-columns: 1fr;
+    max-width: 420px;
+  }
+
+  .inicio-modal-card {
+    min-height: auto;
+  }
+
+  .inicio-modal-header h2 {
+    padding: 0 34px 0 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .inicio-modal-backdrop {
+    padding: 14px;
+  }
+
+  .inicio-modal {
+    padding: 32px 20px 24px;
+    border-radius: 22px;
+  }
+
+  .inicio-modal-close {
+    top: 10px;
+    right: 10px;
+  }
+
+  .inicio-modal-header {
+    margin-bottom: 26px;
+    text-align: left;
+  }
+
+  .inicio-modal-header h2 {
+    font-size: 30px;
+  }
+
+  .inicio-modal-header p {
+    font-size: 15px;
+  }
+
+  .inicio-modal-grid {
+    gap: 18px;
+    margin-bottom: 28px;
+  }
+}
+
+/* RESPONSIVE */
+
+@media (max-width: 1000px) {
+  .inicio-header {
+    flex-direction: column;
+  }
+
+  .inicio-nav {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .inicio-benefits {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .inicio-sports {
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+@media (max-width: 700px) {
+  .inicio-overlay {
+    padding: 22px 18px;
+  }
+
+  .inicio-nav {
+    display: none;
+  }
+
+  @media (max-width: 768px) {
+  .inicio-logo {
+    width: 135px;
+    max-width: 48vw;
+  }
+}
+
+  .inicio-title {
+    font-size: 48px;
+    letter-spacing: -1px;
+  }
+
+  .inicio-description {
+    font-size: 17px;
+  }
+
+  .inicio-highlight {
+    font-size: 18px;
+  }
+
+  .inicio-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .inicio-action-card {
+    grid-template-columns: 62px 1fr;
+    padding: 22px;
+  }
+
+  .inicio-card-icon {
+    width: 58px;
+    height: 58px;
+    font-size: 28px;
+  }
+
+  .inicio-card-content h2 {
+    font-size: 23px;
+  }
+
+  .inicio-benefits {
+    grid-template-columns: 1fr;
+  }
+
+  .inicio-sports-list {
+    width: 100%;
+  }
+
+  .inicio-sport-pill {
+    flex: 1 1 calc(50% - 10px);
+    min-width: 130px;
+    justify-content: center;
+  }
+
+  .inicio-modal {
+    padding: 30px 22px;
+  }
+
+  .inicio-modal h2 {
+    font-size: 28px;
+  }
+}
+.inicio-overlay {
+  position: relative;
+}
+
+.inicio-users-floating-card {
+  position: absolute;
+  right: 85px;
+  top: 42%;
+  transform: translateY(-50%);
+
+  width: 250px;
+  padding: 24px 20px;
+  border-radius: 22px;
+
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+
+  text-align: center;
+  color: #ffffff;
+
+  box-shadow: 0 14px 35px rgba(0, 0, 0, 0.28);
+
+  animation: inicioFloatCounter 3s ease-in-out infinite;
+  z-index: 5;
+}
+
+.inicio-users-number {
+  display: block;
+  margin-bottom: 10px;
+
+  color: #ffffff;
+  font-size: 52px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.inicio-users-floating-card p {
+  margin: 0;
+  color: #ffffff;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.inicio-users-floating-card strong {
+  color: #1e90ff;
+}
+
+@keyframes inicioFloatCounter {
+  0% {
+    transform: translateY(-50%) translateY(0);
+  }
+
+  50% {
+    transform: translateY(-50%) translateY(-10px);
+  }
+
+  100% {
+    transform: translateY(-50%) translateY(0);
+  }
+}
+
+@media (max-width: 1300px) {
+  .inicio-users-floating-card {
+    right: 35px;
+    width: 220px;
+  }
+
+  .inicio-users-number {
+    font-size: 44px;
+  }
+
+  .inicio-users-floating-card p {
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 1050px) {
+  .inicio-users-floating-card {
+    position: static;
+    transform: none;
+
+    width: 100%;
+    max-width: 320px;
+    margin: 30px auto 0;
+
+    animation: none;
+  }
+}
+
+
+/* =========================================================
+   BANCO DE SUPLENTES - PROMOCIÓN PÚBLICA
+   No muestra perfiles ni datos. El CTA dirige al login.
+========================================================= */
+
+.inicio-banco-suplentes {
+  width: min(1180px, 100%);
+  margin: 22px auto;
+  padding: 22px 24px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 22px;
+
+  background:
+    radial-gradient(circle at 90% 15%, rgba(255, 184, 0, 0.28), transparent 34%),
+    linear-gradient(135deg, rgba(8, 123, 255, 0.9), rgba(4, 44, 91, 0.92));
+
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.26);
+}
+
+.inicio-banco-suplentes__icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffe38b;
+  display: grid;
+  place-items: center;
+  font-size: 27px;
+}
+
+.inicio-banco-suplentes__content > span {
+  color: #ffe38b;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.inicio-banco-suplentes h2 {
+  margin: 5px 0 7px;
+  color: #ffffff;
+  font-size: clamp(22px, 3vw, 34px);
+}
+
+.inicio-banco-suplentes p {
+  max-width: 720px;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.84);
+  line-height: 1.45;
+}
+
+.inicio-banco-suplentes > button {
+  min-height: 48px;
+  border: 0;
+  border-radius: 13px;
+  padding: 0 20px;
+  background: linear-gradient(135deg, #ffb800, #e58b00);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 12px 26px rgba(229, 139, 0, 0.28);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.inicio-banco-suplentes > button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 30px rgba(229, 139, 0, 0.38);
+}
+
+.inicio-banco-suplentes > button i {
+  margin-left: 9px;
+}
+
+@media (max-width: 900px) {
+  .inicio-banco-suplentes {
+    grid-template-columns: 58px minmax(0, 1fr);
+  }
+
+  .inicio-banco-suplentes > button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .inicio-banco-suplentes {
+    padding: 19px;
+    grid-template-columns: 1fr;
+    text-align: center;
+  }
+
+  .inicio-banco-suplentes__icon {
+    margin: 0 auto;
+  }
+}

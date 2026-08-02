@@ -1,0 +1,4243 @@
+/* =========================================================
+   DASHBOARD USUARIO - CANCHASYA
+   Archivo completo.
+
+   Objetivos de esta versión:
+   - Mantener el fondo de cancha usado en las demás pantallas.
+   - Mantener banners laterales visibles.
+   - Hacer el dashboard más ancho hacia izquierda y derecha.
+   - Evitar que se corte la card de "Mis Reservas".
+   - Mantener visible el footer de beneficios en desktop.
+   - Estilizar el menú de tres puntos y las alertas de SweetAlert2.
+========================================================= */
+
+/* =========================================================
+   1. CONFIGURACIÓN GENERAL
+========================================================= */
+
+.dashboard-usuario,
+.dashboard-usuario * {
+  box-sizing: border-box;
+}
+
+.dashboard-usuario {
+  --azul-principal: #087bff;
+  --azul-oscuro: #005de0;
+  --azul-texto: #071f4d;
+  --azul-secundario: #39527a;
+  --borde-suave: #d8e2f0;
+  --fondo-card: rgba(255, 255, 255, 0.96);
+
+  /* Ancho de los banners laterales. */
+  /* Ancho real de los banners laterales. */
+  --dashboard-side-banner-width: 220px;
+
+  /* Separación desde el borde de la pantalla hacia adentro. */
+  --dashboard-banner-inset: 34px;
+
+  width: 100%;
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+
+  font-family: Arial, Helvetica, sans-serif;
+  color: var(--azul-texto);
+
+  background-image:
+    linear-gradient(rgba(8, 22, 35, 0.18), rgba(8, 22, 35, 0.18)),
+    url('./fondo-dashboard-cancha.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* =========================================================
+   2. BANNERS LATERALES DEL DASHBOARD USUARIO
+   Se renderizan desde DashboardUsuario.jsx con imágenes aleatorias.
+   No usamos .banner-vertical para no afectar Login ni otras páginas.
+========================================================= */
+
+.dashboard-banner {
+  position: fixed;
+  top: 56px;
+  bottom: 12px;
+
+  width: var(--dashboard-side-banner-width);
+  z-index: 1;
+
+  overflow: hidden;
+  background-color: #2f1c1a;
+
+  border-radius: 18px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28);
+}
+
+.dashboard-banner--left {
+  left: var(--dashboard-banner-inset);
+}
+
+.dashboard-banner--right {
+  right: var(--dashboard-banner-inset);
+}
+
+.dashboard-banner__image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* =========================================================
+   3. ESTRUCTURA PRINCIPAL
+========================================================= */
+
+.dashboard-usuario__overlay {
+  position: relative;
+  z-index: 2;
+  min-height: 100vh;
+  background: transparent;
+}
+
+.dashboard-shell {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+}
+
+.dashboard-shell::before,
+.dashboard-shell::after,
+.dashboard-ad,
+.dashboard-shell__banner {
+  display: none !important;
+  content: none !important;
+}
+
+/* Contenedor central: más ancho, pero siempre respetando banners. */
+.dashboard-shell__main {
+  width: min(
+    1280px,
+    calc(
+      100vw -
+      (var(--dashboard-side-banner-width) * 2) -
+      (var(--dashboard-banner-inset) * 2) -
+      36px
+    )
+  );
+
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 0 6px 8px;
+
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+
+/* =========================================================
+   4. HEADER SUPERIOR
+========================================================= */
+
+.dashboard-header {
+  width: 100%;
+  height: 48px;
+  min-height: 48px;
+  flex-shrink: 0;
+
+  padding: 0 22px;
+  margin: 0 auto;
+
+  background: linear-gradient(135deg, var(--azul-principal), var(--azul-oscuro));
+  color: #ffffff;
+  border-radius: 0 0 10px 10px;
+  box-shadow: 0 8px 24px rgba(0, 93, 224, 0.28);
+
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+
+.dashboard-header__brand {
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.dashboard-header__logo-img {
+  height: 38px;
+  width: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.dashboard-header__social {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+}
+
+.dashboard-header__social a {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: #ffffff !important;
+  text-decoration: none;
+}
+
+.dashboard-header__social i,
+.dashboard-header__social .bi {
+  color: #ffffff !important;
+  font-size: 17px;
+  opacity: 1 !important;
+}
+
+.dashboard-header__social a:hover {
+  transform: translateY(-1px);
+  opacity: 0.86;
+}
+
+.dashboard-header__user {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.dashboard-header__avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+
+  display: grid;
+  place-items: center;
+
+  background: #ffffff;
+  color: var(--azul-principal);
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.dashboard-header__logout {
+  min-height: 30px;
+  padding: 0 10px;
+
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.dashboard-header__logout:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* =========================================================
+   5. LAYOUT PRINCIPAL
+   Izquierda: wizard. Derecha: Mis Reservas.
+========================================================= */
+
+.dashboard-layout {
+  width: 100%;
+  min-width: 0;
+
+  margin: 10px auto 0;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 12px;
+  align-items: stretch;
+
+  flex: 1;
+  min-height: 0;
+  overflow: visible;
+}
+
+.booking-panel,
+.reservations-panel,
+.dashboard-benefits {
+  background: var(--fondo-card);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(220, 230, 245, 0.96);
+  border-radius: 12px;
+  box-shadow: 0 14px 36px rgba(9, 37, 76, 0.16);
+}
+
+.booking-panel,
+.reservations-panel {
+  height: 100%;
+  min-height: 0;
+}
+
+.booking-panel {
+  min-width: 0;
+  padding: 13px 14px 11px;
+  overflow: visible;
+}
+
+.reservations-panel {
+  width: 100%;
+  min-width: 0;
+  padding: 14px;
+
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+
+/* =========================================================
+   6. CABECERA DEL WIZARD
+========================================================= */
+
+.booking-panel__top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: start;
+
+  padding-bottom: 10px;
+  border-bottom: 1px solid #dfe7f2;
+}
+
+.booking-panel h1,
+.reservations-panel h2 {
+  margin: 0;
+  color: var(--azul-texto);
+}
+
+.booking-panel h1 {
+  font-size: 23px;
+  line-height: 1.1;
+}
+
+.booking-panel p,
+.reservations-panel p {
+  margin: 5px 0 0;
+  color: var(--azul-secundario);
+  font-size: 12px;
+}
+
+.steps-indicator {
+  min-width: 330px;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+}
+
+.step {
+  position: relative;
+  text-align: center;
+  color: #7d8ba3;
+}
+
+.step::before {
+  content: '';
+  position: absolute;
+  top: 13px;
+  left: -50%;
+  width: 100%;
+  height: 2px;
+  background: #cad5e4;
+  z-index: 0;
+}
+
+.step:first-child::before {
+  display: none;
+}
+
+.step span {
+  width: 27px;
+  height: 27px;
+  margin: 0 auto 4px;
+
+  border-radius: 50%;
+  border: 2px solid #cad5e4;
+  background: #ffffff;
+
+  display: grid;
+  place-items: center;
+
+  font-size: 13px;
+  font-weight: 900;
+  position: relative;
+  z-index: 1;
+}
+
+.step small {
+  display: block;
+  font-size: 10px;
+}
+
+.step.waiting span {
+  color: #8b98ad;
+}
+
+.step.active {
+  color: #0b64e5;
+}
+
+.step.active span {
+  background: var(--azul-principal);
+  border-color: var(--azul-principal);
+  color: #ffffff;
+}
+
+.step.done {
+  color: #16a34a;
+}
+
+.step.done span {
+  background: #16b95f;
+  border-color: #16b95f;
+  color: #ffffff;
+}
+
+/* =========================================================
+   7. WIZARD INTERNO
+========================================================= */
+
+.booking-panel--expanded {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.booking-wizard {
+  flex: 1;
+  min-height: 0;
+
+  display: grid;
+  grid-template-columns: 165px minmax(0, 1fr);
+  gap: 12px;
+
+  padding-top: 10px;
+}
+
+.booking-sidebar {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: repeat(5, 1fr);
+  gap: 8px;
+  position: relative;
+}
+
+.booking-sidebar::before {
+  content: '';
+  position: absolute;
+  top: 30px;
+  bottom: 30px;
+  left: 16px;
+  width: 2px;
+  background: #d7e4f4;
+  z-index: 0;
+}
+
+.booking-side-step {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--azul-secundario);
+
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+
+  text-align: left;
+  padding: 9px 7px;
+  border-radius: 11px;
+
+  cursor: pointer;
+  transition: 0.22s ease;
+}
+
+.booking-side-step span {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+
+  display: grid;
+  place-items: center;
+
+  background: #b8d8ff;
+  color: #ffffff;
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.booking-side-step strong {
+  display: block;
+  margin: 1px 0 4px;
+  color: var(--azul-texto);
+  font-size: 13px;
+}
+
+.booking-side-step small {
+  display: block;
+  color: var(--azul-secundario);
+  font-size: 10px;
+  line-height: 1.22;
+}
+
+.booking-side-step:hover:not(:disabled) {
+  background: #f3f8ff;
+  border-color: #cfe0f5;
+  transform: translateX(2px);
+}
+
+.booking-side-step.active {
+  background: #ffffff;
+  border-color: var(--azul-principal);
+  box-shadow: 0 8px 20px rgba(8, 123, 255, 0.12);
+}
+
+.booking-side-step.active span {
+  background: var(--azul-principal);
+}
+
+.booking-side-step.done span {
+  background: #16b95f;
+}
+
+.booking-side-step.locked {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.booking-stage {
+  min-width: 0;
+  min-height: 0;
+
+  border: 1px solid #dce8f6;
+  border-radius: 15px;
+
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(247, 251, 255, 0.95));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+
+  overflow: hidden;
+}
+
+.stage-content {
+  min-height: 100%;
+  padding: 22px 24px;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+
+  animation: stageFadeIn 0.24s ease;
+}
+
+.stage-content--dates {
+  justify-content: flex-start;
+  overflow-y: auto;
+}
+
+.stage-heading {
+  text-align: center;
+  max-width: 720px;
+  margin: 0 auto 20px;
+}
+
+.stage-kicker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 23px;
+  padding: 0 11px;
+  border-radius: 999px;
+
+  background: #eaf4ff;
+  color: var(--azul-principal);
+
+  font-size: 11px;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.stage-heading h2 {
+  margin: 0;
+  color: var(--azul-texto);
+  font-size: 27px;
+  line-height: 1.1;
+}
+
+.stage-heading p {
+  margin: 7px 0 0;
+  color: var(--azul-secundario);
+  font-size: 13px;
+}
+
+/* =========================================================
+   8. DEPORTES
+========================================================= */
+
+.sports-grid,
+.sports-grid--large {
+  width: 100%;
+  max-width: 920px;
+  margin: 0 auto;
+
+  display: grid;
+  grid-template-columns: repeat(3, minmax(170px, 1fr));
+  gap: 14px;
+
+  overflow: visible;
+  padding: 0;
+}
+
+.sport-card,
+.sport-card--large {
+  width: 100%;
+  min-width: 0;
+  min-height: 112px;
+
+  padding: 15px 14px;
+  border: 1px solid var(--borde-suave);
+  border-radius: 14px;
+
+  background: rgba(255, 255, 255, 0.98);
+  color: var(--azul-texto);
+
+  display: grid;
+  place-items: center;
+  gap: 7px;
+
+  cursor: pointer;
+  position: relative;
+  transition: 0.2s ease;
+
+  box-shadow: 0 10px 22px rgba(9, 37, 76, 0.07);
+}
+
+.sport-card:hover,
+.sport-card--large:hover {
+  transform: translateY(-3px) scale(1.01);
+  border-color: var(--azul-principal);
+  box-shadow: 0 15px 32px rgba(8, 123, 255, 0.15);
+}
+
+.sport-card.selected,
+.sport-card--large.selected {
+  border-color: var(--azul-principal);
+  background: linear-gradient(180deg, rgba(232, 243, 255, 0.98), rgba(255, 255, 255, 0.98));
+}
+
+.sport-card.selected::after,
+.sport-card--large.selected::after {
+  content: '✓';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+
+  display: grid;
+  place-items: center;
+
+  background: var(--azul-principal);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.sport-card__icon {
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  background: #f4fbff;
+
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.sport-card__image {
+  width: 43px;
+  height: 43px;
+  object-fit: contain;
+  display: block;
+}
+
+.sport-card strong,
+.sport-card--large strong {
+  font-size: 15px;
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* =========================================================
+   9. CLUBES
+========================================================= */
+
+.clubs-grid,
+.clubs-grid--large {
+  width: 100%;
+  max-width: 940px;
+  margin: 0 auto;
+
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.club-card,
+.club-card--large {
+  min-height: 205px;
+  padding: 18px 16px;
+
+  border: 1px solid var(--borde-suave);
+  border-radius: 16px;
+
+  background: rgba(255, 255, 255, 0.98);
+  color: var(--azul-texto);
+
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 5px;
+
+  cursor: pointer;
+  transition: 0.2s ease;
+
+  box-shadow: 0 10px 22px rgba(9, 37, 76, 0.07);
+}
+
+.club-card:hover,
+.club-card--large:hover {
+  transform: translateY(-3px);
+  border-color: var(--azul-principal);
+  box-shadow: 0 15px 32px rgba(8, 123, 255, 0.15);
+}
+
+.club-card.selected,
+.club-card--large.selected {
+  border-color: var(--azul-principal);
+  background: linear-gradient(180deg, rgba(232, 243, 255, 0.96), rgba(255, 255, 255, 0.96));
+}
+
+.club-card__logo,
+.club-card__logo--large {
+  width: 80px;
+  height: 80px;
+  border-radius: 18px;
+
+  background: #ffffff;
+  border: 1px solid #d8e2f0;
+  color: var(--azul-principal);
+
+  display: grid;
+  place-items: center;
+
+  font-weight: 900;
+  font-size: 23px;
+
+  overflow: hidden;
+  padding: 8px;
+  margin: 0 auto 8px;
+
+  transition: transform 0.25s ease;
+}
+
+.club-card:hover .club-card__logo,
+.club-card--large:hover .club-card__logo--large {
+  transform: scale(1.06);
+}
+
+.club-card__logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.club-card strong,
+.club-card--large strong {
+  margin-top: 3px;
+  font-size: 17px;
+  text-align: center;
+}
+
+.club-card small,
+.club-card span,
+.club-card--large small,
+.club-card--large span {
+  color: var(--azul-secundario);
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.25;
+}
+
+.empty-clubs-message {
+  grid-column: 1 / -1;
+  min-height: 130px;
+
+  border: 1px dashed #9bbbe8;
+  border-radius: 12px;
+
+  background: rgba(232, 243, 255, 0.7);
+  color: #0d4fa8;
+
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 18px;
+}
+
+
+/* =========================================================
+   9.1 SERVICIOS / AMENIDADES EN CARDS DE CLUB
+========================================================= */
+
+.club-card,
+.club-card--large {
+  align-content: stretch;
+  cursor: default;
+}
+
+.club-card__summary {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  margin: 0;
+
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+
+  cursor: pointer;
+}
+
+.club-card__summary:focus-visible,
+.club-card__services-toggle:focus-visible,
+.club-card__select:focus-visible {
+  outline: 3px solid rgba(8, 123, 255, 0.28);
+  outline-offset: 3px;
+}
+
+.club-card__price {
+  font-weight: 800;
+}
+
+.club-card__services-hint {
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+
+  padding: 5px 9px;
+  border-radius: 999px;
+
+  background: #f0f7ff;
+  color: var(--azul-principal) !important;
+  border: 1px solid #dbeafe;
+
+  font-size: 11px !important;
+  font-weight: 900;
+}
+
+.club-card__amenities {
+  width: 100%;
+  margin-top: 10px;
+  padding: 11px;
+
+  border-radius: 12px;
+  border: 1px solid #dbeafe;
+  background: linear-gradient(180deg, #f7fbff, #ffffff);
+
+  text-align: left;
+  animation: stageFadeIn 0.2s ease;
+}
+
+.club-card__amenities h4 {
+  margin: 0 0 8px;
+  color: var(--azul-texto);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.club-card__amenities ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+
+  display: grid;
+  gap: 6px;
+}
+
+.club-card__amenities li {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+
+  color: var(--azul-secundario);
+  font-size: 12px;
+  line-height: 1.28;
+}
+
+.club-card__amenities li i {
+  margin-top: 1px;
+  color: #16a34a;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.club-card__amenities p {
+  margin: 0;
+  color: var(--azul-secundario);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.club-card__actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.club-card__services-toggle,
+.club-card__select {
+  width: 100%;
+  min-height: 34px;
+
+  border-radius: 10px;
+  padding: 7px 10px;
+
+  font-size: 12px;
+  font-weight: 900;
+  font-family: inherit;
+
+  cursor: pointer;
+  transition: 0.2s ease;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.club-card__services-toggle {
+  border: 1px solid #c8d6e8;
+  background: #ffffff;
+  color: var(--azul-principal);
+}
+
+.club-card__services-toggle:hover {
+  border-color: var(--azul-principal);
+  background: #eef5ff;
+}
+
+.club-card__select {
+  border: none;
+  background: var(--azul-principal);
+  color: #ffffff;
+  box-shadow: 0 10px 20px rgba(8, 123, 255, 0.16);
+}
+
+.club-card__select:hover {
+  background: var(--azul-oscuro);
+  transform: translateY(-1px);
+}
+
+@media (min-width: 900px) {
+  .club-card__actions {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+
+/* =========================================================
+   10. FECHAS
+========================================================= */
+
+.date-selector,
+.date-selector--large {
+  width: min(100%, 1040px);
+  margin: 0 auto;
+  display: grid;
+  gap: 20px;
+}
+
+.date-selector__month {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 22px;
+  font-size: 21px;
+  color: var(--azul-principal);
+}
+
+.date-selector__month button {
+  border: none;
+  background: transparent;
+  color: var(--azul-principal);
+  font-size: 25px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.date-selector__month button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.date-selector__days,
+.date-selector__days--large {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(92px, 1fr));
+  gap: 11px;
+}
+
+.day-card,
+.day-card--large {
+  min-height: 98px;
+
+  border: 1px solid var(--borde-suave);
+  border-radius: 16px;
+
+  background: #ffffff;
+  color: var(--azul-texto);
+
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 5px;
+
+  cursor: pointer;
+  transition: 0.2s ease;
+
+  box-shadow: 0 10px 22px rgba(9, 37, 76, 0.06);
+}
+
+.day-card:hover,
+.day-card--large:hover:not(:disabled) {
+  transform: translateY(-3px) scale(1.01);
+  border-color: var(--azul-principal);
+  box-shadow: 0 15px 32px rgba(8, 123, 255, 0.15);
+}
+
+.day-card small,
+.day-card--large small {
+  color: var(--azul-secundario);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.day-card strong,
+.day-card--large strong {
+  font-size: 29px;
+  line-height: 1;
+}
+
+.day-card em,
+.day-card--large em {
+  font-style: normal;
+  color: var(--azul-secundario);
+  font-size: 10px;
+}
+
+.day-card.selected,
+.day-card--large.selected {
+  background: var(--azul-principal);
+  color: #ffffff;
+  border-color: var(--azul-principal);
+}
+
+.day-card.selected small,
+.day-card.selected em,
+.day-card--large.selected small,
+.day-card--large.selected em {
+  color: #ffffff;
+}
+
+/* =========================================================
+   11. HORARIOS
+========================================================= */
+
+.time-grid,
+.time-grid--large {
+  width: min(100%, 980px);
+  margin: 0 auto;
+
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+  gap: 12px;
+  align-items: center;
+}
+
+.time-card,
+.time-card--large {
+  height: 62px;
+
+  border: 1px solid var(--borde-suave);
+  border-radius: 14px;
+
+  background: #ffffff;
+  color: var(--azul-texto);
+
+  font-weight: 800;
+  font-size: 17px;
+
+  cursor: pointer;
+  transition: 0.2s ease;
+
+  box-shadow: 0 10px 22px rgba(9, 37, 76, 0.06);
+}
+
+.time-card:hover,
+.time-card--large:hover:not(:disabled) {
+  transform: translateY(-3px) scale(1.01);
+  border-color: var(--azul-principal);
+  box-shadow: 0 15px 32px rgba(8, 123, 255, 0.15);
+}
+
+.time-card:disabled,
+.time-card--large:disabled {
+  cursor: not-allowed;
+  color: #a9b1bd;
+  background: #eeeeee;
+  border-color: #eeeeee;
+  transform: none;
+  box-shadow: none;
+}
+
+.time-card.selected,
+.time-card--large.selected {
+  background: var(--azul-principal);
+  color: #ffffff;
+  border-color: var(--azul-principal);
+}
+
+.time-grid__legend {
+  grid-column: 1 / -1;
+  justify-self: end;
+  display: flex;
+  gap: 20px;
+  color: var(--azul-secundario);
+  font-size: 11px;
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  display: inline-block;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.legend-dot.available {
+  background: #20b45b;
+}
+
+.legend-dot.unavailable {
+  background: #a9b1bd;
+}
+
+/* =========================================================
+   12. CONFIRMACIÓN
+========================================================= */
+
+.booking-summary,
+.booking-summary--large {
+  max-width: 1040px;
+  width: 100%;
+  margin: 0 auto;
+
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 12px;
+}
+
+.summary-item {
+  min-height: 112px;
+  padding: 14px;
+
+  border: 1px solid #dce8f6;
+  border-radius: 16px;
+
+  background: #ffffff;
+
+  display: grid;
+  grid-template-columns: 1fr;
+  justify-items: center;
+  text-align: center;
+  gap: 7px;
+
+  box-shadow: 0 10px 22px rgba(9, 37, 76, 0.06);
+}
+
+.summary-item span {
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: #eef5ff;
+
+  display: grid;
+  place-items: center;
+
+  font-size: 18px;
+}
+
+.summary-item small {
+  color: #6a7890;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.summary-item strong {
+  color: var(--azul-texto);
+  font-size: 15px;
+  word-break: break-word;
+}
+
+.confirm-actions,
+.confirm-actions--large {
+  width: min(100%, 440px);
+  margin: 20px auto 0;
+
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 9px;
+}
+
+.confirm-button {
+  width: 100%;
+  min-height: 50px;
+
+  border: none;
+  border-radius: 13px;
+
+  background: #16b95f;
+  color: #ffffff;
+
+  font-weight: 900;
+  font-size: 16px;
+
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.confirm-button:hover {
+  background: #0da950;
+  transform: translateY(-2px);
+}
+
+.confirm-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
+.reset-button {
+  width: 100%;
+  min-height: 38px;
+
+  border: 1px solid #c8d6e8;
+  background: #ffffff;
+  color: var(--azul-secundario);
+
+  border-radius: 11px;
+  padding: 5px 10px;
+
+  font-size: 12px;
+  font-weight: 800;
+
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.reset-button:hover {
+  border-color: var(--azul-principal);
+  color: var(--azul-principal);
+}
+
+.booking-warning {
+  flex-shrink: 0;
+  margin-top: 8px;
+  padding: 8px 11px;
+
+  background: #eaf4ff;
+  color: #0d4fa8;
+
+  border-radius: 8px;
+  font-size: 11px;
+}
+
+/* =========================================================
+   13. PANEL DERECHO - MIS RESERVAS
+========================================================= */
+
+.reservations-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.reservations-panel__header h2 {
+  font-size: 24px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.reservations-panel__header button,
+.see-all-button {
+  border: 1px solid var(--azul-principal);
+  background: #ffffff;
+  color: var(--azul-principal);
+
+  border-radius: 8px;
+  padding: 0 12px;
+
+  min-width: 112px;
+  min-height: 38px;
+
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+
+  cursor: pointer;
+}
+
+.next-reservation {
+  margin-top: 12px;
+  padding: 11px;
+
+  border: 1px solid #9adbb9;
+  border-radius: 10px;
+
+  background: linear-gradient(135deg, #f3fff8, #ffffff);
+  flex-shrink: 0;
+}
+
+.next-reservation--empty {
+  color: var(--azul-secundario);
+}
+
+.next-reservation>div:first-child {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.next-reservation h3 {
+  margin: 0;
+  color: #16964e;
+  font-size: 18px;
+}
+
+.next-reservation__body {
+  margin-top: 10px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.next-reservation__logo {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+
+  background: linear-gradient(135deg, var(--azul-oscuro), #00a3ff);
+  color: #ffffff;
+
+  font-size: 18px;
+  font-weight: 900;
+
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.next-reservation__body strong {
+  font-size: 13px;
+}
+
+.next-reservation__body p {
+  margin: 5px 0;
+  font-size: 11px;
+}
+
+.next-reservation__body small {
+  font-size: 11px;
+  color: var(--azul-secundario);
+}
+
+.reservations-panel__subtitle {
+  margin: 12px 0 8px;
+  font-size: 19px;
+  flex-shrink: 0;
+}
+
+.reservations-list {
+  display: grid;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 2px;
+  min-height: 0;
+}
+
+.reservation-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 96px;
+  gap: 8px;
+  align-items: center;
+
+  padding: 8px;
+  border: 1px solid #dfe7f2;
+  border-radius: 10px;
+
+  background: #ffffff;
+}
+
+.reservation-card__date {
+  min-height: 56px;
+  border-radius: 8px;
+  background: #f3f7ff;
+
+  display: grid;
+  place-items: center;
+
+  color: var(--azul-principal);
+  font-weight: 900;
+}
+
+.reservation-card__date strong {
+  font-size: 21px;
+  line-height: 1;
+}
+
+.reservation-card__date small {
+  font-size: 9px;
+}
+
+.reservation-card__info {
+  min-width: 0;
+}
+
+.reservation-card__info strong,
+.reservation-card__info p,
+.reservation-card__info small,
+.reservation-card__actions small {
+  font-size: 10px;
+}
+
+.reservation-card__info p {
+  margin: 4px 0;
+  color: #1b3765;
+}
+
+.reservation-card__info small {
+  color: var(--azul-secundario);
+}
+
+.reservation-card__actions {
+  display: grid;
+  gap: 5px;
+  justify-items: start;
+  position: relative;
+}
+
+.reservation-card__actions small {
+  color: #1b3765;
+  line-height: 1.3;
+}
+
+.reservation-card__menu {
+  position: relative;
+  justify-self: start;
+}
+
+.reservation-card__menu-button {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--azul-texto);
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.reservation-card__menu-button:hover:not(:disabled) {
+  background: #eef5ff;
+}
+
+.reservation-card__menu-button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.reservation-card__dropdown {
+  position: absolute;
+  right: 0;
+  top: 32px;
+  z-index: 50;
+
+  min-width: 138px;
+  padding: 6px;
+
+  border: 1px solid #d7e4f4;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 16px 36px rgba(9, 37, 76, 0.18);
+
+  display: grid;
+  gap: 4px;
+}
+
+.reservation-card__dropdown button {
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--azul-texto);
+
+  padding: 9px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  text-align: left;
+}
+
+.reservation-card__dropdown button:hover {
+  background: #eef5ff;
+}
+
+.reservation-card__dropdown-danger {
+  color: #d71920 !important;
+}
+
+.reservation-card__dropdown-danger:hover {
+  background: #fff0f0 !important;
+}
+
+.reservations-empty {
+  min-height: 100px;
+  padding: 14px;
+
+  border: 1px dashed #9bbbe8;
+  border-radius: 10px;
+  background: #f3f8ff;
+
+  color: var(--azul-secundario);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 6px;
+}
+
+.see-all-button {
+  width: 100%;
+  margin-top: 10px;
+  flex-shrink: 0;
+}
+
+/* =========================================================
+   14. BADGES
+========================================================= */
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 3px 7px;
+  border-radius: 999px;
+
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.status--confirmed {
+  background: #e6faee;
+  color: #13a352;
+}
+
+.status--pending {
+  background: #fff3dc;
+  color: #e58a00;
+}
+
+.status--blocked {
+  background: #ffe8e8;
+  color: #f33434;
+}
+
+/* =========================================================
+   15. FOOTER BENEFICIOS
+========================================================= */
+
+.dashboard-benefits {
+  width: 100%;
+  min-height: 46px;
+
+  margin: 8px auto 0;
+  padding: 8px 16px;
+
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+
+  flex-shrink: 0;
+}
+
+.dashboard-benefits div {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1px 10px;
+  align-items: center;
+}
+
+.dashboard-benefits span {
+  grid-row: span 2;
+  font-size: 20px;
+}
+
+.dashboard-benefits strong {
+  color: #0b3b86;
+  font-size: 12px;
+}
+
+.dashboard-benefits small {
+  color: var(--azul-secundario);
+  font-size: 11px;
+}
+
+/* =========================================================
+   16. MODAL PROPIO DE RESERVA CONFIRMADA/MODIFICADA
+========================================================= */
+
+.reserva-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(7, 20, 44, 0.45);
+  backdrop-filter: blur(4px);
+
+  display: grid;
+  place-items: center;
+
+  z-index: 9999;
+  padding: 20px;
+}
+
+.reserva-modal {
+  width: min(100%, 480px);
+
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 28px 24px 24px;
+
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.28);
+  text-align: center;
+
+  animation: modalFadeIn 0.25s ease;
+}
+
+.reserva-modal__icon {
+  width: 74px;
+  height: 74px;
+  margin: 0 auto 16px;
+
+  border-radius: 50%;
+  background: linear-gradient(135deg, #16b95f, #0f9c4f);
+  color: #ffffff;
+
+  font-size: 34px;
+  font-weight: 900;
+
+  display: grid;
+  place-items: center;
+
+  box-shadow: 0 10px 25px rgba(22, 185, 95, 0.28);
+}
+
+.reserva-modal h2 {
+  margin: 0 0 8px;
+  font-size: 28px;
+  color: var(--azul-texto);
+}
+
+.reserva-modal__subtitle {
+  margin: 0 0 20px;
+  font-size: 14px;
+  color: var(--azul-secundario);
+}
+
+.reserva-modal__details {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 22px;
+  text-align: left;
+}
+
+.reserva-modal__details div {
+  padding: 12px 14px;
+  border: 1px solid #dce7f3;
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+.reserva-modal__details span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #6d7d96;
+}
+
+.reserva-modal__details strong {
+  font-size: 15px;
+  color: var(--azul-texto);
+}
+
+.reserva-modal__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.reserva-modal__button {
+  flex: 1;
+  min-height: 46px;
+
+  border: none;
+  border-radius: 12px;
+
+  background: linear-gradient(135deg, var(--azul-principal), var(--azul-oscuro));
+  color: #ffffff;
+
+  font-size: 15px;
+  font-weight: 900;
+
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.reserva-modal__button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(8, 123, 255, 0.22);
+}
+
+.reserva-modal__button--secondary {
+  background: #ffffff;
+  color: var(--azul-principal);
+  border: 1px solid var(--azul-principal);
+}
+
+.reserva-modal__button--secondary:hover {
+  background: #f0f7ff;
+  box-shadow: none;
+}
+
+/* =========================================================
+   17. SWEETALERT CANCHASYA
+   Reemplaza confirm/alert nativos al modificar/cancelar.
+========================================================= */
+
+.cy-alert-popup {
+  width: min(92vw, 470px) !important;
+  border-radius: 22px !important;
+  padding: 26px 24px 24px !important;
+  background: #ffffff !important;
+  color: #071f4d !important;
+  border: 1px solid rgba(8, 123, 255, 0.16) !important;
+  box-shadow: 0 28px 80px rgba(7, 31, 77, 0.32) !important;
+}
+
+.cy-alert-title {
+  color: #071f4d !important;
+  font-size: 27px !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.4px !important;
+}
+
+.cy-alert-text {
+  color: #39527a !important;
+  font-size: 15px !important;
+  font-weight: 500 !important;
+  line-height: 1.45 !important;
+}
+
+.cy-alert-text p {
+  margin: 6px 0 !important;
+}
+
+.cy-alert-text small {
+  display: block;
+  margin-top: 10px;
+  color: #6a7890;
+}
+
+.cy-alert-button {
+  min-width: 135px !important;
+  min-height: 44px !important;
+  border-radius: 12px !important;
+  border: none !important;
+  background: linear-gradient(135deg, #087bff, #005de0) !important;
+  color: #ffffff !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  box-shadow: 0 12px 26px rgba(8, 123, 255, 0.28) !important;
+}
+
+.cy-alert-button:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 16px 32px rgba(8, 123, 255, 0.34) !important;
+}
+
+.cy-alert-button--danger,
+.cy-alert-button--error {
+  background: linear-gradient(135deg, #ff4d4d, #d71920) !important;
+  box-shadow: 0 12px 26px rgba(215, 25, 32, 0.25) !important;
+}
+
+.cy-alert-cancel {
+  min-width: 120px !important;
+  min-height: 44px !important;
+  border-radius: 12px !important;
+  border: 1px solid #c8d6e8 !important;
+  background: #ffffff !important;
+  color: #39527a !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+}
+
+.cy-alert-cancel:hover {
+  background: #f0f7ff !important;
+  color: #087bff !important;
+  border-color: #087bff !important;
+}
+
+.swal2-icon {
+  margin-top: 8px !important;
+  margin-bottom: 14px !important;
+}
+
+.swal2-actions {
+  gap: 10px !important;
+  margin-top: 22px !important;
+}
+
+.swal2-container {
+  z-index: 99999 !important;
+}
+
+/* =========================================================
+   18. ANIMACIONES
+========================================================= */
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes stageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* =========================================================
+   19. NOTEBOOKS GRANDES
+========================================================= */
+
+@media (max-width: 1600px) {
+  .dashboard-usuario {
+    --dashboard-side-banner-width: 112px;
+  }
+
+  .dashboard-shell__main {
+    width: min(1400px, calc(100vw - (var(--dashboard-side-banner-width) * 2) - 24px));
+  }
+
+  .dashboard-layout {
+    grid-template-columns: minmax(0, 1fr) 350px;
+  }
+
+  .booking-wizard {
+    grid-template-columns: 155px minmax(0, 1fr);
+  }
+
+  .sports-grid,
+  .sports-grid--large {
+    max-width: 820px;
+    gap: 12px;
+  }
+
+  .sport-card,
+  .sport-card--large {
+    min-height: 104px;
+  }
+
+  .stage-heading h2 {
+    font-size: 25px;
+  }
+}
+
+/* =========================================================
+   20. NOTEBOOKS MEDIANAS / TABLETS
+========================================================= */
+
+@media (max-width: 1280px) {
+
+  .dashboard-usuario::before,
+  .dashboard-usuario::after {
+    display: none;
+  }
+
+  .dashboard-shell__main {
+    width: min(96vw, 1180px);
+    padding: 0 10px 14px;
+  }
+
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+
+  .reservations-panel {
+    order: -1;
+  }
+}
+
+/* =========================================================
+   21. CELULARES
+========================================================= */
+
+@media (max-width: 760px) {
+  .dashboard-shell__main {
+    width: 100%;
+    padding: 0 10px 12px;
+  }
+
+  .dashboard-header {
+    height: auto;
+    min-height: 58px;
+    padding: 10px 14px;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    justify-items: center;
+  }
+
+  .dashboard-header__brand,
+  .dashboard-header__social,
+  .dashboard-header__user {
+    justify-content: center;
+    justify-self: center;
+  }
+
+  .dashboard-header__logo-img {
+    height: 36px;
+  }
+
+  .booking-panel,
+  .reservations-panel {
+    padding: 14px;
+  }
+
+  .booking-panel__top {
+    grid-template-columns: 1fr;
+  }
+
+  .steps-indicator {
+    min-width: 0;
+  }
+
+  .booking-wizard {
+    grid-template-columns: 1fr;
+  }
+
+  .booking-sidebar {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+
+  .booking-sidebar::before {
+    display: none;
+  }
+
+  .booking-side-step {
+    grid-template-columns: 34px 1fr;
+  }
+
+  .stage-content {
+    padding: 20px 14px;
+  }
+
+  .stage-heading h2 {
+    font-size: 23px;
+  }
+
+  .sports-grid,
+  .sports-grid--large,
+  .clubs-grid,
+  .clubs-grid--large,
+  .date-selector__days,
+  .date-selector__days--large,
+  .time-grid,
+  .time-grid--large,
+  .booking-summary,
+  .booking-summary--large {
+    grid-template-columns: 1fr;
+  }
+
+  .reservation-card {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-benefits {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* =========================================================
+   22. AJUSTE FINAL DE BANNERS Y ANCHO DEL DASHBOARD
+   Estos overrides dejan el dashboard más ancho sin tapar los banners.
+========================================================= */
+
+@media (min-width: 1500px) {
+  .dashboard-usuario {
+    --dashboard-side-banner-width: 185px;
+  }
+
+  .dashboard-shell__main {
+    width: min(1600px, calc(100vw - (var(--dashboard-side-banner-width) * 2) - 18px));
+  }
+}
+
+@media (max-width: 1300px) {
+  .dashboard-usuario {
+    --dashboard-side-banner-width: 135px;
+  }
+
+  .dashboard-shell__main {
+    width: min(100%, calc(100vw - (var(--dashboard-side-banner-width) * 2) - 16px));
+  }
+}
+
+@media (max-width: 1050px) {
+  .dashboard-banner {
+    display: none;
+  }
+
+  .dashboard-shell__main {
+    width: 100%;
+  }
+}
+
+/* =========================================================
+   FIX FINAL - FONDO + BANNERS DASHBOARD USUARIO
+   Pegar al final del archivo para que pise reglas anteriores.
+========================================================= */
+
+.dashboard-usuario {
+  --dashboard-side-banner-width: 220px !important;
+  --dashboard-banner-inset: 34px !important;
+
+  background-image:
+    linear-gradient(rgba(8, 22, 35, 0.18), rgba(8, 22, 35, 0.18)),
+    url('./fondo-dashboard-cancha.png') !important;
+
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
+}
+
+.dashboard-banner {
+  position: fixed !important;
+  top: 56px !important;
+  bottom: 12px !important;
+  width: var(--dashboard-side-banner-width) !important;
+
+  border-radius: 18px !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.28) !important;
+}
+
+.dashboard-banner--left {
+  left: var(--dashboard-banner-inset) !important;
+}
+
+.dashboard-banner--right {
+  right: var(--dashboard-banner-inset) !important;
+}
+
+.dashboard-shell__main {
+  width: min(
+    1280px,
+    calc(
+      100vw -
+      (var(--dashboard-side-banner-width) * 2) -
+      (var(--dashboard-banner-inset) * 2) -
+      36px
+    )
+  ) !important;
+}
+
+@media (max-width: 1600px) {
+  .dashboard-usuario {
+    --dashboard-side-banner-width: 180px !important;
+    --dashboard-banner-inset: 24px !important;
+  }
+
+  .dashboard-shell__main {
+    width: min(
+      1280px,
+      calc(
+        100vw -
+        (var(--dashboard-side-banner-width) * 2) -
+        (var(--dashboard-banner-inset) * 2) -
+        30px
+      )
+    ) !important;
+  }
+}
+
+@media (max-width: 1280px) {
+  .dashboard-usuario {
+    --dashboard-side-banner-width: 135px !important;
+    --dashboard-banner-inset: 10px !important;
+  }
+
+  .dashboard-shell__main {
+    width: min(
+      1120px,
+      calc(
+        100vw -
+        (var(--dashboard-side-banner-width) * 2) -
+        (var(--dashboard-banner-inset) * 2) -
+        22px
+      )
+    ) !important;
+  }
+}
+
+@media (max-width: 1050px) {
+  .dashboard-banner {
+    display: none !important;
+  }
+
+  .dashboard-shell__main {
+    width: 100% !important;
+  }
+}
+/* =========================================================
+   FIX FINAL PROPORCIONES DASHBOARD USUARIO
+   - Banners más anchos
+   - Banners ocupan alto completo
+   - Dashboard central más ancho
+   - Sin scroll general de página
+   - Proporciones más grandes, no achicadas
+========================================================= */
+
+.dashboard-usuario {
+  --dashboard-side-banner-width: 260px !important;
+  --dashboard-banner-inset: 18px !important;
+
+  width: 100vw !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+
+  overflow: hidden !important;
+
+  background-image:
+    linear-gradient(rgba(8, 22, 35, 0.16), rgba(8, 22, 35, 0.16)),
+    url('./fondo-dashboard-cancha.png') !important;
+
+  background-size: cover !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  background-attachment: fixed !important;
+}
+
+/* BANNERS MÁS GRANDES Y OCUPANDO TODO EL ALTO ÚTIL */
+.dashboard-banner {
+  position: fixed !important;
+
+  top: 48px !important;
+  bottom: 0 !important;
+
+  width: var(--dashboard-side-banner-width) !important;
+  height: calc(100vh - 48px) !important;
+
+  z-index: 1 !important;
+
+  border-radius: 0 !important;
+  overflow: hidden !important;
+
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.32) !important;
+}
+
+.dashboard-banner--left {
+  left: var(--dashboard-banner-inset) !important;
+}
+
+.dashboard-banner--right {
+  right: var(--dashboard-banner-inset) !important;
+}
+
+.dashboard-banner__image {
+  width: 100% !important;
+  height: 100% !important;
+
+  display: block !important;
+  object-fit: cover !important;
+  object-position: center !important;
+}
+
+/* CAPA GENERAL SIN SCROLL */
+.dashboard-usuario__overlay {
+  height: 100vh !important;
+  min-height: 100vh !important;
+  overflow: hidden !important;
+}
+
+.dashboard-shell {
+  width: 100% !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+
+  display: flex !important;
+  justify-content: center !important;
+
+  overflow: hidden !important;
+}
+
+/* DASHBOARD CENTRAL MÁS ANCHO */
+.dashboard-shell__main {
+  width: min(
+    1540px,
+    calc(
+      100vw -
+      (var(--dashboard-side-banner-width) * 2) -
+      (var(--dashboard-banner-inset) * 2) -
+      28px
+    )
+  ) !important;
+
+  height: 100vh !important;
+  min-height: 100vh !important;
+
+  margin: 0 auto !important;
+  padding: 0 8px 8px !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+
+  overflow: hidden !important;
+}
+
+/* HEADER UN POCO MÁS COMPACTO PARA GANAR ALTO */
+.dashboard-header {
+  height: 44px !important;
+  min-height: 44px !important;
+
+  padding: 0 22px !important;
+  border-radius: 0 0 10px 10px !important;
+
+  flex-shrink: 0 !important;
+}
+
+.dashboard-header__logo-img {
+  height: 34px !important;
+}
+
+.dashboard-header__avatar {
+  width: 28px !important;
+  height: 28px !important;
+}
+
+/* LAYOUT CENTRAL OCUPA EL ALTO JUSTO SIN GENERAR SCROLL GENERAL */
+.dashboard-layout {
+  flex: 1 !important;
+  min-height: 0 !important;
+
+  margin-top: 8px !important;
+
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 380px !important;
+  gap: 12px !important;
+
+  overflow: hidden !important;
+}
+
+/* PANELES PRINCIPALES A ALTURA CONTROLADA */
+.booking-panel,
+.reservations-panel {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* PANEL IZQUIERDO MÁS GRANDE, SIN ACHICAR TEXTOS */
+.booking-panel {
+  padding: 12px 14px 10px !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* PANEL DERECHO MÁS ANCHO */
+.reservations-panel {
+  padding: 13px !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* CABECERA DEL WIZARD MÁS COMPACTA */
+.booking-panel__top {
+  padding-bottom: 8px !important;
+  gap: 14px !important;
+  flex-shrink: 0 !important;
+}
+
+.booking-panel h1 {
+  font-size: 24px !important;
+}
+
+.booking-panel p {
+  font-size: 12px !important;
+}
+
+/* WIZARD OCUPANDO TODO EL ESPACIO DISPONIBLE */
+.booking-wizard {
+  flex: 1 !important;
+  min-height: 0 !important;
+
+  grid-template-columns: 170px minmax(0, 1fr) !important;
+  gap: 12px !important;
+
+  padding-top: 8px !important;
+
+  overflow: hidden !important;
+}
+
+.booking-sidebar {
+  min-height: 0 !important;
+  gap: 7px !important;
+}
+
+.booking-side-step {
+  padding: 8px 7px !important;
+}
+
+.booking-side-step strong {
+  font-size: 13px !important;
+}
+
+.booking-side-step small {
+  font-size: 10px !important;
+}
+
+/* ESCENARIO PRINCIPAL */
+.booking-stage {
+  height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.stage-content {
+  height: 100% !important;
+  min-height: 0 !important;
+
+  padding: 18px 22px !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+
+  overflow: hidden !important;
+}
+
+.stage-heading {
+  margin-bottom: 18px !important;
+}
+
+.stage-heading h2 {
+  font-size: 28px !important;
+}
+
+.stage-heading p {
+  font-size: 13px !important;
+}
+
+/* DEPORTES MÁS GRANDES Y PROPORCIONALES */
+.sports-grid,
+.sports-grid--large {
+  max-width: 960px !important;
+
+  grid-template-columns: repeat(3, minmax(190px, 1fr)) !important;
+  gap: 14px !important;
+}
+
+.sport-card,
+.sport-card--large {
+  min-height: 116px !important;
+  padding: 15px 14px !important;
+}
+
+.sport-card__icon {
+  width: 58px !important;
+  height: 58px !important;
+}
+
+.sport-card__image {
+  width: 43px !important;
+  height: 43px !important;
+}
+
+.sport-card strong,
+.sport-card--large strong {
+  font-size: 15px !important;
+}
+
+/* PANEL MIS RESERVAS: NO SCROLLEA TODA LA PÁGINA, SOLO LA LISTA SI HACE FALTA */
+.reservations-panel__header {
+  flex-shrink: 0 !important;
+}
+
+.next-reservation {
+  flex-shrink: 0 !important;
+}
+
+.reservations-list,
+.reservations-panel__list,
+.reservations-panel ul,
+.reservations-panel .reservation-list {
+  min-height: 0 !important;
+  overflow-y: auto !important;
+}
+
+/* BOTÓN INFERIOR DEL PANEL DERECHO SIEMPRE VISIBLE */
+.see-all-button {
+  flex-shrink: 0 !important;
+  margin-top: auto !important;
+}
+
+/* BENEFICIOS ABAJO MÁS COMPACTOS PARA QUE NO FUERCEN SCROLL */
+.dashboard-benefits {
+  min-height: 44px !important;
+  height: 44px !important;
+
+  margin-top: 6px !important;
+  padding: 6px 14px !important;
+
+  flex-shrink: 0 !important;
+  overflow: hidden !important;
+}
+
+/* =========================================================
+   AJUSTE PARA MONITORES MUY GRANDES
+========================================================= */
+
+@media (min-width: 1700px) {
+  .dashboard-usuario {
+    --dashboard-side-banner-width: 270px !important;
+    --dashboard-banner-inset: 20px !important;
+  }
+
+  .dashboard-shell__main {
+    width: min(
+      1580px,
+      calc(
+        100vw -
+        (var(--dashboard-side-banner-width) * 2) -
+        (var(--dashboard-banner-inset) * 2) -
+        30px
+      )
+    ) !important;
+  }
+
+  .dashboard-layout {
+    grid-template-columns: minmax(0, 1fr) 390px !important;
+  }
+}
+
+/* =========================================================
+   NOTEBOOK / PANTALLAS MEDIANAS
+========================================================= */
+
+@media (max-width: 1500px) {
+  .dashboard-usuario {
+    --dashboard-side-banner-width: 210px !important;
+    --dashboard-banner-inset: 12px !important;
+  }
+
+  .dashboard-shell__main {
+    width: min(
+      1260px,
+      calc(
+        100vw -
+        (var(--dashboard-side-banner-width) * 2) -
+        (var(--dashboard-banner-inset) * 2) -
+        22px
+      )
+    ) !important;
+  }
+
+  .dashboard-layout {
+    grid-template-columns: minmax(0, 1fr) 350px !important;
+  }
+}
+
+/* =========================================================
+   CUANDO YA NO ENTRAN BIEN LOS BANNERS, SE OCULTAN
+========================================================= */
+
+@media (max-width: 1180px) {
+  .dashboard-banner {
+    display: none !important;
+  }
+
+  .dashboard-shell__main {
+    width: 100% !important;
+    padding: 0 10px 8px !important;
+  }
+}
+
+/* =========================================================
+   AJUSTE FINAL BANNERS DASHBOARD
+   - bordes redondeados
+   - alto casi completo de pantalla
+   - imagen completa visible
+========================================================= */
+
+.dashboard-usuario {
+  --dashboard-side-banner-width: 240px !important;
+  --dashboard-banner-inset: 12px !important;
+}
+
+/* Banner contenedor */
+.dashboard-banner {
+  position: fixed !important;
+  top: 52px !important;         /* arranca debajo del header */
+  bottom: 10px !important;      /* llega casi al borde inferior */
+  width: var(--dashboard-side-banner-width) !important;
+  height: calc(100vh - 62px) !important;
+
+  border-radius: 22px !important;
+  overflow: hidden !important;
+
+  background: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.28) !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.dashboard-banner--left {
+  left: var(--dashboard-banner-inset) !important;
+}
+
+.dashboard-banner--right {
+  right: var(--dashboard-banner-inset) !important;
+}
+
+/* Imagen interna del banner */
+.dashboard-banner__image {
+  width: 100% !important;
+  height: 100% !important;
+  display: block !important;
+
+  /* IMPORTANTE:
+     contain = muestra la imagen completa
+     cover = llena todo pero recorta
+  */
+  object-fit: contain !important;
+  object-position: center !important;
+
+  background: #ffffff !important;
+  padding: 0 !important;
+}
+
+/* Si querés que visualmente el dashboard no invada el banner */
+.dashboard-shell__main {
+  width: min(
+    1480px,
+    calc(
+      100vw -
+      (var(--dashboard-side-banner-width) * 2) -
+      (var(--dashboard-banner-inset) * 2) -
+      24px
+    )
+  ) !important;
+}
+
+/* Responsive */
+@media (max-width: 1550px) {
+  .dashboard-usuario {
+    --dashboard-side-banner-width: 210px !important;
+    --dashboard-banner-inset: 10px !important;
+  }
+
+  .dashboard-banner {
+    top: 52px !important;
+    bottom: 8px !important;
+    height: calc(100vh - 60px) !important;
+    border-radius: 18px !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  .dashboard-banner {
+    display: none !important;
+  }
+
+  .dashboard-shell__main {
+    width: 100% !important;
+  }
+}
+/* =========================================================
+   FIX FINAL DEFINITIVO - BANNERS FULL HEIGHT
+   - Llegan hasta arriba y abajo de la pantalla
+   - Son un poco más anchos
+   - La imagen ocupa TODO el banner
+========================================================= */
+
+.dashboard-usuario {
+  --dashboard-side-banner-width: 210px !important;
+  --dashboard-banner-inset: 6px !important;
+
+  width: 100vw !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+  overflow: hidden !important;
+}
+
+/* Banner lateral completo */
+.dashboard-banner {
+  position: fixed !important;
+
+  top: 0 !important;
+  bottom: 0 !important;
+  height: 100vh !important;
+  min-height: 100vh !important;
+
+  width: var(--dashboard-side-banner-width) !important;
+
+  z-index: 1 !important;
+
+  border-radius: 18px !important;
+  overflow: hidden !important;
+
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.34) !important;
+
+  background-color: transparent !important;
+  background-image: var(--banner-img) !important;
+  background-size: cover !important;
+  background-position: center center !important;
+  background-repeat: no-repeat !important;
+}
+
+/* Posición */
+.dashboard-banner--left {
+  left: var(--dashboard-banner-inset) !important;
+}
+
+.dashboard-banner--right {
+  right: var(--dashboard-banner-inset) !important;
+}
+
+/* Por si quedó algún img viejo dentro del aside */
+.dashboard-banner__image {
+  display: none !important;
+}
+
+/* Ajustamos el ancho del dashboard central para respetar banners más anchos */
+.dashboard-shell__main {
+  width: min(
+    1480px,
+    calc(
+      100vw -
+      (var(--dashboard-side-banner-width) * 2) -
+      (var(--dashboard-banner-inset) * 2) -
+      24px
+    )
+  ) !important;
+}
+
+/* Notebook / pantallas medianas */
+@media (max-width: 1500px) {
+  .dashboard-usuario {
+    --dashboard-side-banner-width: 185px !important;
+    --dashboard-banner-inset: 5px !important;
+  }
+
+  .dashboard-shell__main {
+    width: min(
+      1260px,
+      calc(
+        100vw -
+        (var(--dashboard-side-banner-width) * 2) -
+        (var(--dashboard-banner-inset) * 2) -
+        20px
+      )
+    ) !important;
+  }
+}
+
+/* Pantallas chicas */
+@media (max-width: 1180px) {
+  .dashboard-banner {
+    display: none !important;
+  }
+
+  .dashboard-shell__main {
+    width: 100% !important;
+    padding: 0 10px 8px !important;
+  }
+}
+/* =========================================================
+   FIX DROPDOWN ÚLTIMA RESERVA
+   - Evita que el menú Modificar/Eliminar genere scroll hacia abajo
+   - Hace que el menú de la última reserva abra hacia arriba
+========================================================= */
+
+.reservations-list {
+  overflow-y: auto !important;
+  overflow-x: visible !important;
+  padding-right: 4px !important;
+  padding-bottom: 8px !important;
+}
+
+.reservation-card {
+  position: relative !important;
+  overflow: visible !important;
+  z-index: 1;
+}
+
+.reservation-card:has(.reservation-card__dropdown) {
+  z-index: 20;
+}
+
+.reservation-card__actions,
+.reservation-card__menu {
+  position: relative !important;
+  overflow: visible !important;
+}
+
+.reservation-card__dropdown {
+  position: absolute !important;
+  right: 0 !important;
+  top: 32px !important;
+  bottom: auto !important;
+
+  z-index: 9999 !important;
+
+  min-width: 145px !important;
+  padding: 8px !important;
+
+  background: #ffffff !important;
+  border: 1px solid #d7e4f4 !important;
+  border-radius: 12px !important;
+
+  box-shadow: 0 18px 40px rgba(9, 37, 76, 0.22) !important;
+}
+
+/* 
+   Cuando la reserva es la última de la lista,
+   el menú abre hacia arriba.
+*/
+.reservations-list .reservation-card:last-child .reservation-card__dropdown {
+  top: auto !important;
+  bottom: 34px !important;
+}
+
+/*
+   También aplicamos el mismo comportamiento para las últimas 2 reservas.
+   Esto ayuda cuando el panel tiene poco alto disponible.
+*/
+.reservations-list .reservation-card:nth-last-child(2) .reservation-card__dropdown {
+  top: auto !important;
+  bottom: 34px !important;
+}
+
+/* Botones internos del dropdown */
+.reservation-card__dropdown button {
+  width: 100% !important;
+  min-height: 42px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+
+  padding: 10px 12px !important;
+
+  border: none !important;
+  border-radius: 9px !important;
+
+  background: transparent !important;
+  color: var(--azul-texto) !important;
+
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  text-align: left !important;
+
+  cursor: pointer !important;
+}
+
+.reservation-card__dropdown button:hover {
+  background: #eef5ff !important;
+}
+
+.reservation-card__dropdown-danger {
+  color: #d71920 !important;
+}
+
+.reservation-card__dropdown-danger:hover {
+  background: #fff0f0 !important;
+}
+
+/* En mobile dejamos que abra normal hacia abajo porque las cards se apilan */
+@media (max-width: 760px) {
+  .reservations-list .reservation-card:last-child .reservation-card__dropdown,
+  .reservations-list .reservation-card:nth-last-child(2) .reservation-card__dropdown {
+    top: 32px !important;
+    bottom: auto !important;
+  }
+}
+/* =========================================================
+   FIX COLOR DROPDOWN RESERVAS
+   - Modificar en rojo
+   - Eliminar en negro
+========================================================= */
+
+/* Todos los botones del dropdown en negro por defecto */
+.reservation-card__dropdown button,
+.reservation-card__dropdown button i,
+.reservation-card__dropdown button .bi {
+  color: var(--azul-texto) !important;
+}
+
+/* Botón de modificar en rojo */
+.reservation-card__dropdown button:first-child,
+.reservation-card__dropdown button:first-child i,
+.reservation-card__dropdown button:first-child .bi {
+  color: #d71920 !important;
+}
+
+/* Botón eliminar en negro, aunque tenga clase danger */
+.reservation-card__dropdown-danger,
+.reservation-card__dropdown-danger i,
+.reservation-card__dropdown-danger .bi {
+  color: var(--azul-texto) !important;
+}
+
+/* Hover de modificar */
+.reservation-card__dropdown button:first-child:hover {
+  background: #fff0f0 !important;
+}
+
+/* Hover de eliminar */
+.reservation-card__dropdown-danger:hover {
+  background: #eef5ff !important;
+}
+
+/* =========================================================
+   FIX RESPONSIVE MOBILE - DASHBOARD USUARIO + MERCADO PAGO
+   Este bloque va al final para pisar los overrides desktop con !important.
+   Corrige:
+   - evita layout en dos columnas en ancho celular;
+   - permite scroll vertical en mobile;
+   - oculta banners laterales;
+   - acomoda wizard, cards, reservas, modal y botones de Mercado Pago.
+========================================================= */
+
+@media (max-width: 1180px) {
+  .dashboard-banner {
+    display: none !important;
+  }
+
+  .dashboard-usuario {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 100vh !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  .dashboard-usuario__overlay,
+  .dashboard-shell,
+  .dashboard-shell__main {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 100vh !important;
+    overflow: visible !important;
+  }
+
+  .dashboard-shell__main {
+    padding: 0 10px 12px !important;
+  }
+
+  .dashboard-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  .booking-panel {
+    order: 1 !important;
+  }
+
+  .reservations-panel {
+    order: 2 !important;
+  }
+
+  .booking-panel,
+  .reservations-panel,
+  .dashboard-benefits {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  .reservations-list {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .dashboard-shell__main {
+    padding: 0 8px 12px !important;
+  }
+
+  .dashboard-header {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 52px !important;
+    padding: 8px 10px !important;
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
+    border-radius: 0 0 10px 10px !important;
+  }
+
+  .dashboard-header__logo-img {
+    height: 32px !important;
+  }
+
+  .dashboard-header__social {
+    gap: 16px !important;
+  }
+
+  .dashboard-header__user {
+    width: 100% !important;
+    justify-content: center !important;
+    flex-wrap: wrap !important;
+    white-space: normal !important;
+    font-size: 12px !important;
+  }
+
+  .booking-panel,
+  .reservations-panel {
+    padding: 10px !important;
+    border-radius: 12px !important;
+  }
+
+  .booking-panel__top {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+    text-align: center !important;
+  }
+
+  .booking-panel h1 {
+    font-size: 21px !important;
+  }
+
+  .steps-indicator {
+    width: 100% !important;
+    min-width: 0 !important;
+    gap: 2px !important;
+  }
+
+  .step span {
+    width: 25px !important;
+    height: 25px !important;
+    font-size: 12px !important;
+  }
+
+  .step small {
+    font-size: 9px !important;
+  }
+
+  .booking-wizard {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding-top: 8px !important;
+  }
+
+  .booking-sidebar {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    grid-template-rows: none !important;
+    gap: 5px !important;
+    width: 100% !important;
+  }
+
+  .booking-sidebar::before {
+    display: none !important;
+  }
+
+  .booking-side-step {
+    grid-template-columns: 1fr !important;
+    justify-items: center !important;
+    text-align: center !important;
+    padding: 7px 4px !important;
+    border-radius: 10px !important;
+    min-height: 72px !important;
+  }
+
+  .booking-side-step span {
+    width: 24px !important;
+    height: 24px !important;
+    border-radius: 8px !important;
+    font-size: 12px !important;
+  }
+
+  .booking-side-step strong {
+    font-size: 10px !important;
+    margin: 2px 0 !important;
+  }
+
+  .booking-side-step small {
+    font-size: 8px !important;
+    line-height: 1.15 !important;
+  }
+
+  .booking-stage {
+    width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .stage-content {
+    padding: 16px 10px !important;
+    justify-content: flex-start !important;
+  }
+
+  .stage-heading {
+    margin-bottom: 14px !important;
+  }
+
+  .stage-heading h2 {
+    font-size: 22px !important;
+  }
+
+  .stage-heading p {
+    font-size: 12px !important;
+  }
+
+  .sports-grid,
+  .sports-grid--large,
+  .clubs-grid,
+  .clubs-grid--large,
+  .date-selector__days,
+  .date-selector__days--large,
+  .time-grid,
+  .time-grid--large,
+  .booking-summary,
+  .booking-summary--large {
+    width: 100% !important;
+    max-width: 100% !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .sport-card,
+  .sport-card--large {
+    min-height: 105px !important;
+    padding: 12px 8px !important;
+  }
+
+  .sport-card__icon {
+    width: 48px !important;
+    height: 48px !important;
+  }
+
+  .sport-card__image {
+    width: 36px !important;
+    height: 36px !important;
+  }
+
+  .sport-card strong,
+  .sport-card--large strong {
+    font-size: 13px !important;
+  }
+
+  .club-card,
+  .club-card--large {
+    min-height: 165px !important;
+    padding: 12px 10px !important;
+  }
+
+  .club-card__logo,
+  .club-card__logo--large {
+    width: 58px !important;
+    height: 58px !important;
+    border-radius: 14px !important;
+  }
+
+  .club-card strong,
+  .club-card--large strong {
+    font-size: 14px !important;
+  }
+
+  .club-card small,
+  .club-card span,
+  .club-card--large small,
+  .club-card--large span {
+    font-size: 10px !important;
+  }
+
+  .date-selector,
+  .date-selector--large {
+    gap: 12px !important;
+  }
+
+  .date-selector__month {
+    gap: 14px !important;
+    font-size: 17px !important;
+  }
+
+  .day-card,
+  .day-card--large {
+    min-height: 82px !important;
+    border-radius: 13px !important;
+  }
+
+  .day-card strong,
+  .day-card--large strong {
+    font-size: 24px !important;
+  }
+
+  .time-card,
+  .time-card--large {
+    height: 52px !important;
+    font-size: 15px !important;
+  }
+
+  .time-grid__legend {
+    justify-self: center !important;
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+  }
+
+  .summary-item {
+    min-height: 98px !important;
+    padding: 12px 8px !important;
+  }
+
+  .confirm-actions,
+  .confirm-actions--large {
+    width: 100% !important;
+  }
+
+  .booking-warning {
+    font-size: 10px !important;
+    line-height: 1.35 !important;
+  }
+
+  .reservations-panel__header {
+    align-items: center !important;
+  }
+
+  .reservations-panel__header h2 {
+    font-size: 21px !important;
+  }
+
+  .reservations-panel__header button,
+  .see-all-button {
+    min-width: auto !important;
+    min-height: 34px !important;
+    padding: 0 10px !important;
+    font-size: 11px !important;
+  }
+
+  .next-reservation__body {
+    align-items: flex-start !important;
+  }
+
+  .reservation-card {
+    grid-template-columns: 48px minmax(0, 1fr) auto !important;
+    gap: 8px !important;
+    padding: 8px !important;
+  }
+
+  .reservation-card__actions {
+    justify-items: end !important;
+    text-align: right !important;
+  }
+
+  .reservation-card__actions small {
+    max-width: 110px !important;
+  }
+
+  .reservation-card__dropdown {
+    right: 0 !important;
+    left: auto !important;
+    min-width: 156px !important;
+  }
+
+  .dashboard-benefits {
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
+    margin-top: 10px !important;
+  }
+
+  .reserva-modal-overlay {
+    padding: 10px !important;
+    align-items: start !important;
+    overflow-y: auto !important;
+  }
+
+  .reserva-modal {
+    width: 100% !important;
+    max-width: 430px !important;
+    max-height: calc(100vh - 20px) !important;
+    overflow-y: auto !important;
+    padding: 22px 16px 16px !important;
+    border-radius: 18px !important;
+  }
+
+  .reserva-modal__icon {
+    width: 58px !important;
+    height: 58px !important;
+    margin-bottom: 12px !important;
+    font-size: 28px !important;
+  }
+
+  .reserva-modal h2 {
+    font-size: 22px !important;
+  }
+
+  .reserva-modal__subtitle {
+    font-size: 12px !important;
+    margin-bottom: 14px !important;
+  }
+
+  .reserva-modal__details {
+    gap: 8px !important;
+    margin-bottom: 14px !important;
+  }
+
+  .reserva-modal__details div {
+    padding: 9px 10px !important;
+  }
+
+  .reserva-modal__details span {
+    font-size: 10px !important;
+  }
+
+  .reserva-modal__details strong {
+    font-size: 13px !important;
+  }
+
+  .reserva-modal__actions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  .reserva-modal__button {
+    width: 100% !important;
+    min-height: 42px !important;
+    font-size: 13px !important;
+  }
+
+  .cy-alert-popup {
+    width: calc(100vw - 24px) !important;
+    max-width: 420px !important;
+    padding: 22px 16px 18px !important;
+    border-radius: 18px !important;
+  }
+
+  .cy-alert-title {
+    font-size: 22px !important;
+  }
+
+  .cy-alert-text {
+    font-size: 13px !important;
+  }
+
+  .swal2-actions {
+    width: 100% !important;
+    gap: 8px !important;
+  }
+
+  .swal2-actions button {
+    min-width: 0 !important;
+    flex: 1 1 auto !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .dashboard-shell__main {
+    padding: 0 6px 10px !important;
+  }
+
+  .booking-panel,
+  .reservations-panel {
+    padding: 8px !important;
+  }
+
+  .booking-side-step {
+    min-height: 64px !important;
+    padding: 6px 2px !important;
+  }
+
+  .booking-side-step strong {
+    font-size: 9px !important;
+  }
+
+  .booking-side-step small {
+    display: none !important;
+  }
+
+  .sports-grid,
+  .sports-grid--large,
+  .clubs-grid,
+  .clubs-grid--large,
+  .date-selector__days,
+  .date-selector__days--large,
+  .time-grid,
+  .time-grid--large,
+  .booking-summary,
+  .booking-summary--large {
+    grid-template-columns: 1fr !important;
+  }
+
+  .reservation-card {
+    grid-template-columns: 44px minmax(0, 1fr) 34px !important;
+  }
+
+  .reservation-card__actions {
+    align-self: start !important;
+  }
+
+  .reservation-card__actions > .status,
+  .reservation-card__actions > small {
+    grid-column: 1 / -1 !important;
+  }
+
+  .reservation-card__actions small {
+    display: none !important;
+  }
+}
+
+
+/* =========================================================
+   FIX MISTERX - RESPONSIVE RESERVAS + ESTADO DE PAGO
+   - Evita que los badges rompan las cards.
+   - Ordena acciones y menú de tres puntos.
+   - Da estilo específico a "Pagar reserva".
+   - Ajusta modal/SweetAlert de Mercado Pago en pantallas chicas.
+========================================================= */
+
+.reservation-card {
+  grid-template-columns: 52px minmax(0, 1fr) minmax(118px, auto) !important;
+  align-items: start !important;
+}
+
+.reservation-card__actions {
+  justify-items: end !important;
+  text-align: right !important;
+  align-content: start !important;
+  min-width: 0 !important;
+}
+
+.reservation-card__actions .status {
+  max-width: 118px !important;
+  white-space: normal !important;
+  line-height: 1.15 !important;
+  text-align: center !important;
+}
+
+.reservation-card__actions small {
+  max-width: 118px !important;
+  line-height: 1.25 !important;
+}
+
+.reservation-card__menu {
+  justify-self: end !important;
+}
+
+.reservation-card__dropdown-pay,
+.reservation-card__dropdown-pay i,
+.reservation-card__dropdown-pay .bi {
+  color: #009ee3 !important;
+}
+
+.reservation-card__dropdown-pay:hover {
+  background: #e6f7ff !important;
+}
+
+@media (max-width: 760px) {
+  .reservation-card {
+    grid-template-columns: 46px minmax(0, 1fr) !important;
+    gap: 8px !important;
+    align-items: start !important;
+  }
+
+  .reservation-card__date {
+    grid-row: 1 / span 2 !important;
+  }
+
+  .reservation-card__info {
+    grid-column: 2 !important;
+    min-width: 0 !important;
+  }
+
+  .reservation-card__actions {
+    grid-column: 1 / -1 !important;
+    display: grid !important;
+    grid-template-columns: 1fr auto !important;
+    gap: 6px 8px !important;
+    align-items: center !important;
+    justify-items: start !important;
+    text-align: left !important;
+    padding-top: 6px !important;
+    border-top: 1px solid #eef3fb !important;
+  }
+
+  .reservation-card__actions .status {
+    max-width: none !important;
+    white-space: nowrap !important;
+    font-size: 9px !important;
+  }
+
+  .reservation-card__actions small {
+    grid-column: 1 !important;
+    max-width: none !important;
+    font-size: 9px !important;
+    display: block !important;
+  }
+
+  .reservation-card__menu {
+    grid-column: 2 !important;
+    grid-row: 1 / span 2 !important;
+    justify-self: end !important;
+    align-self: center !important;
+  }
+
+  .reservation-card__menu-button {
+    width: 30px !important;
+    height: 30px !important;
+  }
+
+  .reservation-card__dropdown {
+    right: 0 !important;
+    left: auto !important;
+    top: 34px !important;
+    min-width: 170px !important;
+    max-width: calc(100vw - 32px) !important;
+  }
+
+  .swal2-popup.cy-alert-popup {
+    width: calc(100vw - 28px) !important;
+    max-width: 390px !important;
+  }
+
+  .swal2-actions {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .swal2-actions button {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+
+@media (max-width: 430px) {
+  .reservation-card {
+    grid-template-columns: 42px minmax(0, 1fr) !important;
+  }
+
+  .reservation-card__date strong {
+    font-size: 18px !important;
+  }
+
+  .reservation-card__actions {
+    grid-template-columns: 1fr auto !important;
+  }
+
+  .reservation-card__actions .status {
+    font-size: 8.5px !important;
+    padding: 3px 6px !important;
+  }
+}
+
+/* =========================================================
+   TORNEOS CONTEXTUALES - PASO 2
+   Se muestran únicamente cuando el deporte seleccionado
+   tiene torneos publicados y vigentes.
+========================================================= */
+
+.stage-content--clubs {
+  justify-content: flex-start;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+.tournament-context-loading {
+  width: min(100%, 940px);
+  margin: 0 auto 16px;
+  padding: 12px 16px;
+  border: 1px solid #cfe0f5;
+  border-radius: 12px;
+  background: #f4f9ff;
+  color: #0d4fa8;
+  font-size: 12px;
+  font-weight: 800;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.tournament-context-loading i {
+  animation: tournamentSpin 0.9s linear infinite;
+}
+
+.tournament-context {
+  width: min(100%, 940px);
+  margin: 0 auto 20px;
+  padding: 16px;
+
+  border: 1px solid #f2c94c;
+  border-radius: 17px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 206, 71, 0.2), transparent 34%),
+    linear-gradient(135deg, #fffdf4, #ffffff 62%);
+  box-shadow: 0 14px 34px rgba(116, 84, 0, 0.11);
+}
+
+.tournament-context__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
+.tournament-context__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+
+  margin-bottom: 5px;
+  color: #976800;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tournament-context__header h3 {
+  margin: 0;
+  color: var(--azul-texto);
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.tournament-context__header p {
+  margin: 4px 0 0;
+  color: var(--azul-secundario);
+  font-size: 11px;
+}
+
+.tournament-context__continue {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 13px;
+
+  border: 1px solid #c9d8ea;
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--azul-secundario);
+
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: 0.2s ease;
+}
+
+.tournament-context__continue:hover {
+  border-color: var(--azul-principal);
+  color: var(--azul-principal);
+  transform: translateY(-1px);
+}
+
+.tournament-context__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+  gap: 12px;
+}
+
+.tournament-context-card {
+  min-width: 0;
+  min-height: 154px;
+
+  border: 1px solid #e5d38d;
+  border-radius: 14px;
+  background: #ffffff;
+  overflow: hidden;
+
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+
+  box-shadow: 0 10px 24px rgba(63, 48, 5, 0.08);
+}
+
+.tournament-context-card__media {
+  width: 108px;
+  min-height: 154px;
+  padding: 0;
+
+  border: none;
+  border-right: 1px solid #edf0f5;
+  background: #eef5ff;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.tournament-context-card__media img {
+  width: 100%;
+  height: 100%;
+  min-height: 154px;
+  display: block;
+  object-fit: cover;
+  object-position: center;
+  transition: transform 0.25s ease;
+}
+
+.tournament-context-card__media:hover img {
+  transform: scale(1.04);
+}
+
+.tournament-context-card__media > span {
+  width: 100%;
+  height: 100%;
+  min-height: 154px;
+
+  display: grid;
+  place-items: center;
+
+  color: #c28a00;
+  font-size: 35px;
+}
+
+.tournament-context-card__body {
+  min-width: 0;
+  padding: 12px 13px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.tournament-context-card__sport {
+  display: inline-flex;
+  align-items: center;
+  min-height: 21px;
+  padding: 0 8px;
+  border-radius: 999px;
+
+  background: #fff1bd;
+  color: #805900;
+
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.tournament-context-card h4 {
+  width: 100%;
+  margin: 7px 0 5px;
+  color: var(--azul-texto);
+  font-size: 15px;
+  line-height: 1.18;
+
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.tournament-context-card__club,
+.tournament-context-card__date {
+  width: 100%;
+  margin: 2px 0 !important;
+  color: var(--azul-secundario) !important;
+  font-size: 10px !important;
+  line-height: 1.25;
+
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tournament-context-card__club i,
+.tournament-context-card__date i {
+  flex: 0 0 auto;
+  color: var(--azul-principal);
+}
+
+.tournament-context-card__actions {
+  width: 100%;
+  margin-top: auto;
+  padding-top: 9px;
+
+  display: grid;
+  grid-template-columns: auto minmax(125px, 1fr);
+  gap: 7px;
+}
+
+.tournament-context-card__details,
+.tournament-context-card__join {
+  min-height: 32px;
+  border-radius: 9px;
+  padding: 0 10px;
+
+  font-size: 10px;
+  font-weight: 900;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.tournament-context-card__details {
+  border: 1px solid #c8d6e8;
+  background: #ffffff;
+  color: var(--azul-secundario);
+}
+
+.tournament-context-card__join {
+  border: none;
+  background: linear-gradient(135deg, #ffb800, #e58b00);
+  color: #ffffff;
+  box-shadow: 0 8px 18px rgba(229, 139, 0, 0.22);
+}
+
+.tournament-context-card__details:hover,
+.tournament-context-card__join:hover {
+  transform: translateY(-1px);
+}
+
+.clubs-selection-section {
+  width: 100%;
+  scroll-margin-top: 16px;
+}
+
+.clubs-selection-section__heading {
+  width: min(100%, 940px);
+  margin: 0 auto 11px;
+  padding: 0 2px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  color: var(--azul-secundario);
+}
+
+.clubs-selection-section__heading span {
+  font-size: 11px;
+}
+
+.clubs-selection-section__heading strong {
+  color: var(--azul-texto);
+  font-size: 12px;
+}
+
+/* =========================================================
+   MODAL DE DETALLE DEL TORNEO
+========================================================= */
+
+.tournament-detail-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+
+  padding: 24px;
+  background: rgba(3, 16, 38, 0.78);
+  backdrop-filter: blur(8px);
+
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+}
+
+.tournament-detail-modal {
+  position: relative;
+  width: min(100%, 960px);
+  max-height: min(90vh, 760px);
+
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 22px;
+  background: #ffffff;
+  overflow: hidden;
+
+  display: grid;
+  grid-template-columns: minmax(280px, 0.86fr) minmax(380px, 1.14fr);
+
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.42);
+  animation: tournamentModalIn 0.22s ease;
+}
+
+.tournament-detail-modal__close {
+  position: absolute;
+  top: 13px;
+  right: 13px;
+  z-index: 3;
+
+  width: 38px;
+  height: 38px;
+  border: 1px solid rgba(7, 31, 77, 0.14);
+  border-radius: 50%;
+
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--azul-texto);
+  cursor: pointer;
+
+  display: grid;
+  place-items: center;
+
+  box-shadow: 0 8px 20px rgba(7, 31, 77, 0.16);
+}
+
+.tournament-detail-modal__flyer {
+  min-height: 540px;
+  background: #071f4d;
+  overflow: hidden;
+}
+
+.tournament-detail-modal__flyer img {
+  width: 100%;
+  height: 100%;
+  min-height: 540px;
+  max-height: min(90vh, 760px);
+  display: block;
+  object-fit: contain;
+  background: #071f4d;
+}
+
+.tournament-detail-modal__flyer-empty {
+  width: 100%;
+  min-height: 540px;
+
+  display: grid;
+  place-items: center;
+
+  color: #ffbf19;
+  font-size: 72px;
+  background:
+    radial-gradient(circle at center, rgba(8, 123, 255, 0.35), transparent 55%),
+    #071f4d;
+}
+
+.tournament-detail-modal__content {
+  min-width: 0;
+  padding: 34px 34px 28px;
+  overflow-y: auto;
+  color: var(--azul-texto);
+}
+
+.tournament-detail-modal__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+
+  min-height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+
+  background: #fff1bd;
+  color: #805900;
+
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.tournament-detail-modal__content h2 {
+  margin: 13px 44px 18px 0;
+  color: var(--azul-texto);
+  font-size: clamp(24px, 3vw, 36px);
+  line-height: 1.08;
+}
+
+.tournament-detail-modal__meta {
+  display: grid;
+  gap: 9px;
+}
+
+.tournament-detail-modal__meta > p {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #e0e8f3;
+  border-radius: 12px;
+  background: #f8fbff;
+
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+}
+
+.tournament-detail-modal__meta > p > i {
+  color: var(--azul-principal);
+  font-size: 17px;
+}
+
+.tournament-detail-modal__meta span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tournament-detail-modal__meta small {
+  color: #6a7890;
+  font-size: 9px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.tournament-detail-modal__meta strong {
+  color: var(--azul-texto);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.tournament-detail-modal__description {
+  margin-top: 18px;
+}
+
+.tournament-detail-modal__description h3 {
+  margin: 0 0 7px;
+  color: var(--azul-texto);
+  font-size: 15px;
+}
+
+.tournament-detail-modal__description p {
+  margin: 0;
+  color: var(--azul-secundario);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-line;
+}
+
+.tournament-detail-modal__notice {
+  margin-top: 17px;
+  padding: 11px 12px;
+  border: 1px solid #cfe0f5;
+  border-radius: 12px;
+  background: #eef6ff;
+  color: #0d4fa8;
+
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.tournament-detail-modal__notice p {
+  margin: 0;
+  color: inherit;
+  font-size: 10px;
+  line-height: 1.42;
+}
+
+.tournament-detail-modal__actions {
+  margin-top: 20px;
+
+  display: grid;
+  grid-template-columns: minmax(130px, 0.8fr) minmax(190px, 1.2fr);
+  gap: 9px;
+}
+
+.tournament-detail-modal__secondary,
+.tournament-detail-modal__primary {
+  min-height: 45px;
+  border-radius: 12px;
+  padding: 0 14px;
+
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  transition: 0.2s ease;
+}
+
+.tournament-detail-modal__secondary {
+  border: 1px solid #c8d6e8;
+  background: #ffffff;
+  color: var(--azul-secundario);
+}
+
+.tournament-detail-modal__primary {
+  border: none;
+  background: linear-gradient(135deg, #ffb800, #e58b00);
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgba(229, 139, 0, 0.28);
+}
+
+.tournament-detail-modal__secondary:hover,
+.tournament-detail-modal__primary:hover {
+  transform: translateY(-2px);
+}
+
+@keyframes tournamentSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes tournamentModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 1180px) {
+  .tournament-context__list {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 840px) {
+  .tournament-context__header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .tournament-context__continue {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .tournament-detail-modal {
+    max-height: none;
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .tournament-detail-modal__flyer,
+  .tournament-detail-modal__flyer img,
+  .tournament-detail-modal__flyer-empty {
+    min-height: 320px;
+    max-height: 55vh;
+  }
+
+  .tournament-detail-modal__content {
+    overflow: visible;
+  }
+}
+
+@media (max-width: 560px) {
+  .tournament-context {
+    padding: 12px;
+  }
+
+  .tournament-context-card {
+    grid-template-columns: 86px minmax(0, 1fr);
+  }
+
+  .tournament-context-card__media {
+    width: 86px;
+  }
+
+  .tournament-context-card__actions {
+    grid-template-columns: 1fr;
+  }
+
+  .clubs-selection-section__heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .tournament-detail-overlay {
+    padding: 10px;
+    place-items: start center;
+  }
+
+  .tournament-detail-modal {
+    border-radius: 16px;
+  }
+
+  .tournament-detail-modal__content {
+    padding: 25px 18px 20px;
+  }
+
+  .tournament-detail-modal__actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================================================
+   FIX DEFINITIVO - SCROLL INTERNO PASO 2 / LISTADO DE CANCHAS
+   Problema:
+   - El dashboard no scrollea por diseño.
+   - .stage-content tenía overflow:hidden y centrado vertical.
+   - Si hay muchas canchas, las cards inferiores quedan cortadas.
+
+   Solución:
+   - En desktop, solo scrollea el contenido del paso 2.
+   - No se mueve toda la página.
+   - No se mueve el panel derecho "Mis Reservas".
+========================================================= */
+
+@media (min-width: 1181px) {
+  .booking-stage {
+    min-height: 0 !important;
+    height: 100% !important;
+    overflow: hidden !important;
+  }
+
+  .stage-content--clubs {
+    height: 100% !important;
+    min-height: 0 !important;
+    max-height: 100% !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: flex-start !important;
+    align-items: stretch !important;
+
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+
+    padding-bottom: 28px !important;
+    padding-right: 18px !important;
+
+    scrollbar-gutter: stable;
+    overscroll-behavior: contain;
+  }
+
+  .stage-content--clubs .stage-heading,
+  .stage-content--clubs .tournament-context,
+  .stage-content--clubs .tournament-context-loading {
+    flex: 0 0 auto !important;
+  }
+
+  .clubs-selection-section {
+    flex: 0 0 auto !important;
+    min-height: 0 !important;
+    width: 100% !important;
+    padding-bottom: 22px !important;
+  }
+
+  .clubs-grid,
+  .clubs-grid--large {
+    overflow: visible !important;
+  }
+
+  .stage-content--clubs::-webkit-scrollbar {
+    width: 10px;
+  }
+
+  .stage-content--clubs::-webkit-scrollbar-track {
+    background: rgba(225, 235, 248, 0.75);
+    border-radius: 999px;
+  }
+
+  .stage-content--clubs::-webkit-scrollbar-thumb {
+    background: rgba(8, 123, 255, 0.38);
+    border-radius: 999px;
+    border: 2px solid rgba(245, 249, 255, 0.95);
+  }
+
+  .stage-content--clubs::-webkit-scrollbar-thumb:hover {
+    background: rgba(8, 123, 255, 0.58);
+  }
+}
+
+/* En pantallas chicas dejamos que scrollee la página completa,
+   porque forzar scroll interno dentro del wizard empeora la usabilidad móvil. */
+@media (max-width: 1180px) {
+  .stage-content--clubs {
+    justify-content: flex-start !important;
+    overflow: visible !important;
+  }
+}
+

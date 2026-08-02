@@ -1,0 +1,184 @@
+/* =========================================================
+   LAYOUT GENERAL DE LA APP
+   Contenedor padre de las páginas que usan Header, Footer,
+   contenido central y, opcionalmente, banners laterales.
+========================================================= */
+
+.app-layout {
+  width: 100%;
+  min-height: 100vh;
+
+  display: flex;
+  flex-direction: column;
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   CUERPO PRINCIPAL DEL LAYOUT
+   Por defecto trabaja con 1 sola columna.
+   Cuando hay banners, se activa la variante .layout--with-banners.
+========================================================= */
+
+.layout {
+  width: 100%;
+  flex: 1;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   LAYOUT CON BANNERS
+   Se usa cuando desde el JSX llamamos:
+   <Layout showBanners={true} />
+   
+   Estructura:
+   [ banner izquierdo ] [ contenido principal ] [ banner derecho ]
+========================================================= */
+
+.layout--with-banners {
+  grid-template-columns: 230px minmax(0, 1fr) 230px;
+  gap: 18px;
+
+  padding: 0 14px 18px;
+}
+
+
+/* =========================================================
+   CONTENEDORES LATERALES DE BANNERS
+   Mantienen los banners alineados y separados del contenido.
+========================================================= */
+
+.layout-banner {
+  min-width: 0;
+
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+
+  padding-top: 14px;
+  box-sizing: border-box;
+}
+
+.layout-banner--left {
+  justify-content: flex-start;
+}
+
+.layout-banner--right {
+  justify-content: flex-end;
+}
+
+
+/* =========================================================
+   CONTENIDO PRINCIPAL
+   Acá se renderiza cada página: Login, Register, Inicio, etc.
+========================================================= */
+
+.main-content {
+  width: 100%;
+  min-width: 0;
+  flex: 1;
+
+  position: relative;
+  box-sizing: border-box;
+
+  padding: 20px;
+
+  background-image:
+    linear-gradient(rgba(120, 145, 155, 0.45), rgba(120, 145, 155, 0.45)),
+    url('/src/components/inicio/backgroud1.png');
+
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+
+/* =========================================================
+   CONTENIDO PRINCIPAL CUANDO HAY BANNERS
+   Reduce un poco el padding para aprovechar mejor el ancho.
+========================================================= */
+
+.main-content--with-banners {
+  padding: 18px 10px;
+  border-radius: 0;
+}
+
+
+/* =========================================================
+   AJUSTE ESPECIAL PARA LOGIN
+   Si el login está dentro del layout con banners, centramos
+   mejor la card y dejamos respirar los laterales.
+========================================================= */
+
+.main-content--with-banners .login-page-container {
+  min-height: calc(100vh - 120px);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+/* =========================================================
+   RESPONSIVE NOTEBOOK
+   Achica banners para pantallas medianas.
+========================================================= */
+
+@media (max-width: 1300px) {
+  .layout--with-banners {
+    grid-template-columns: 190px minmax(0, 1fr) 190px;
+    gap: 14px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .main-content--with-banners {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+}
+
+
+/* =========================================================
+   RESPONSIVE TABLET / MOBILE
+   Oculta columnas de banners para que no rompan el diseño.
+   El componente BannerVertical también se oculta por CSS propio,
+   pero acá además sacamos las columnas del grid.
+========================================================= */
+
+@media (max-width: 992px) {
+  .layout,
+  .layout--with-banners {
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding: 0;
+  }
+
+  .layout-banner {
+    display: none;
+  }
+
+  .main-content,
+  .main-content--with-banners {
+    padding: 14px;
+  }
+}
+
+
+/* =========================================================
+   RESPONSIVE CELULAR CHICO
+========================================================= */
+
+@media (max-width: 576px) {
+  .main-content,
+  .main-content--with-banners {
+    padding: 10px;
+  }
+}
