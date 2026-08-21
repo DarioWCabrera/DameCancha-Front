@@ -1,12 +1,13 @@
+import { API_URL, apiUrl, mediaUrl } from '../../config/api';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 
-import logoCanchasYa from '../../assets/logo_blanco_720.png';
+import logoDameCancha from '../../assets/logo_blanco_720.png';
 import './BancoSuplentes.css';
 
-const API_URL = 'http://localhost:3000';
+
 
 const DIAS = [
   'lunes',
@@ -18,19 +19,34 @@ const DIAS = [
   'domingo',
 ];
 
-const FORM_INICIAL = {
-  id_deporte: '',
-  nivel: '',
-  modalidad: '',
-  posicion: '',
-  ciudad: '',
-  dias_disponibles: [],
-  hora_desde: '18:00',
-  hora_hasta: '22:00',
-  fecha_desde: '',
-  fecha_hasta: '',
-  descripcion: '',
-  contacto_visible: false,
+const obtenerFechaLocalISO = (fecha = new Date()) => {
+  const anio = fecha.getFullYear();
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  const dia = String(fecha.getDate()).padStart(2, '0');
+
+  return `${anio}-${mes}-${dia}`;
+};
+
+const crearFormInicial = () => {
+  const hoy = new Date();
+  const vencimiento = new Date(hoy);
+  vencimiento.setDate(vencimiento.getDate() + 30);
+
+  return {
+    id_deporte: '',
+    nivel: '',
+    modalidad: '',
+    posicion: '',
+    ciudad: '',
+    dias_disponibles: [],
+    hora_desde: '18:00',
+    hora_hasta: '22:00',
+    // Las fechas ya no se piden al usuario. Se conservan internamente para
+    // que la publicación pueda vencer automáticamente y no queden avisos eternos.
+    fecha_desde: obtenerFechaLocalISO(hoy),
+    fecha_hasta: obtenerFechaLocalISO(vencimiento),
+    descripcion: '',
+  };
 };
 
 const FILTROS_INICIALES = {
@@ -115,7 +131,7 @@ function BancoSuplentes({ usuario, onLogout }) {
   const [solicitudesRecibidas, setSolicitudesRecibidas] = useState([]);
   const [solicitudesEnviadas, setSolicitudesEnviadas] = useState([]);
 
-  const [form, setForm] = useState(FORM_INICIAL);
+  const [form, setForm] = useState(crearFormInicial);
   const [filtros, setFiltros] = useState(FILTROS_INICIALES);
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -270,8 +286,6 @@ function BancoSuplentes({ usuario, onLogout }) {
       !form.id_deporte ||
       !form.nivel.trim() ||
       !form.ciudad.trim() ||
-      !form.fecha_desde ||
-      !form.fecha_hasta ||
       !form.descripcion.trim()
     ) {
       throw new Error('Completá todos los campos obligatorios.');
@@ -309,7 +323,7 @@ function BancoSuplentes({ usuario, onLogout }) {
         }),
       });
 
-      setForm(FORM_INICIAL);
+      setForm(crearFormInicial());
       await mostrarExito(
         'Disponibilidad publicada',
         'Ya aparecés en el Banco de suplentes.'
@@ -358,31 +372,6 @@ function BancoSuplentes({ usuario, onLogout }) {
       await requestApi(
         `/banco-suplentes/disponibilidades/${idDisponibilidad}`,
         { method: 'DELETE' }
-      );
-
-      await cargarMisDisponibilidades();
-    } catch (error) {
-      mostrarError(error);
-    }
-  };
-
-  const quitarPublicacionDeMiLista = async (idDisponibilidad) => {
-    const confirmacion = await Swal.fire({
-      icon: 'question',
-      title: '¿Quitar de tu lista?',
-      text: 'La publicación dejará de mostrarse en Mis publicaciones.',
-      showCancelButton: true,
-      confirmButtonText: 'Quitar',
-      cancelButtonText: 'Cancelar',
-      confirmButtonColor: '#dc3545',
-    });
-
-    if (!confirmacion.isConfirmed) return;
-
-    try {
-      await requestApi(
-        `/banco-suplentes/disponibilidades/${idDisponibilidad}/ocultar`,
-        { method: 'PATCH' }
       );
 
       await cargarMisDisponibilidades();
@@ -450,23 +439,28 @@ function BancoSuplentes({ usuario, onLogout }) {
     }
   };
 
-  const quitarSolicitudDeMiLista = async (idSolicitud) => {
+
+  const eliminarSolicitud = async (solicitud) => {
+    if (!solicitud?.id_solicitud) return;
+
     const confirmacion = await Swal.fire({
-      icon: 'question',
-      title: '¿Quitar solicitud?',
-      text: 'La solicitud dejará de mostrarse en tu lista.',
+      icon: 'warning',
+      title: '¿Eliminar solicitud?',
+      text: 'La solicitud se quitará definitivamente para ambos jugadores.',
       showCancelButton: true,
-      confirmButtonText: 'Quitar',
+      confirmButtonText: 'Eliminar',
       cancelButtonText: 'Cancelar',
       confirmButtonColor: '#dc3545',
+      cancelButtonColor: '#64748b',
+      reverseButtons: true,
     });
 
     if (!confirmacion.isConfirmed) return;
 
     try {
       await requestApi(
-        `/banco-suplentes/solicitudes/${idSolicitud}/ocultar`,
-        { method: 'PATCH' }
+        `/banco-suplentes/solicitudes/${solicitud.id_solicitud}`,
+        { method: 'DELETE' }
       );
 
       await cargarSolicitudes();
@@ -474,6 +468,9 @@ function BancoSuplentes({ usuario, onLogout }) {
       mostrarError(error);
     }
   };
+
+  const telefonoVisible = (contacto) =>
+    String(contacto?.telefono || '').trim();
 
   const contactosAceptados = useMemo(
     () =>
@@ -518,7 +515,7 @@ function BancoSuplentes({ usuario, onLogout }) {
           className="bs-brand"
           onClick={() => navigate('/dashboardUsuario')}
         >
-          <img src={logoCanchasYa} alt="DameCancha" />
+          <img src={logoDameCancha} alt="DameCancha" />
         </button>
 
         <div className="bs-header__title">
@@ -810,13 +807,6 @@ function BancoSuplentes({ usuario, onLogout }) {
                           {formatearHora(disponibilidad.hora_hasta)}
                         </dd>
                       </div>
-
-                      <div>
-                        <dt>Disponible hasta</dt>
-                        <dd>
-                          {formatearFecha(disponibilidad.fecha_hasta)}
-                        </dd>
-                      </div>
                     </dl>
 
                     {!disponibilidad.es_propia && (
@@ -932,30 +922,6 @@ function BancoSuplentes({ usuario, onLogout }) {
               </label>
 
               <label>
-                <span>Desde *</span>
-                <input
-                  type="date"
-                  required
-                  value={form.fecha_desde}
-                  onChange={(event) =>
-                    actualizarForm('fecha_desde', event.target.value)
-                  }
-                />
-              </label>
-
-              <label>
-                <span>Hasta *</span>
-                <input
-                  type="date"
-                  required
-                  value={form.fecha_hasta}
-                  onChange={(event) =>
-                    actualizarForm('fecha_hasta', event.target.value)
-                  }
-                />
-              </label>
-
-              <label>
                 <span>Horario desde *</span>
                 <input
                   type="time"
@@ -1018,26 +984,13 @@ function BancoSuplentes({ usuario, onLogout }) {
               <small>{form.descripcion.length}/1000</small>
             </label>
 
-            <label className="bs-privacy-option">
-              <input
-                type="checkbox"
-                checked={form.contacto_visible}
-                onChange={(event) =>
-                  actualizarForm(
-                    'contacto_visible',
-                    event.target.checked
-                  )
-                }
-              />
-
-              <span>
-                <strong>Permitir contacto directo</strong>
-                <small>
-                  Si no lo activás, tus datos se comparten recién
-                  cuando aceptás una solicitud.
-                </small>
-              </span>
-            </label>
+            <div className="bs-privacy-note">
+              <strong>Tu contacto es privado</strong>
+              <small>
+                El teléfono se comparte únicamente cuando una solicitud es aceptada.
+                La publicación permanece activa durante 30 días, salvo que la pauses o elimines antes.
+              </small>
+            </div>
 
             <div className="bs-form-actions">
               <button
@@ -1099,8 +1052,7 @@ function BancoSuplentes({ usuario, onLogout }) {
                       <small>
                         {publicacion.dias_disponibles.join(', ')} ·{' '}
                         {formatearHora(publicacion.hora_desde)} a{' '}
-                        {formatearHora(publicacion.hora_hasta)} · hasta{' '}
-                        {formatearFecha(publicacion.fecha_hasta)}
+                        {formatearHora(publicacion.hora_hasta)}
                       </small>
                     </div>
 
@@ -1131,9 +1083,7 @@ function BancoSuplentes({ usuario, onLogout }) {
                         </button>
                       ) : null}
 
-                      {['activa', 'pausada'].includes(
-                        publicacion.estado
-                      ) && (
+                      {publicacion.estado !== 'eliminada' && (
                         <button
                           type="button"
                           className="danger"
@@ -1143,25 +1093,7 @@ function BancoSuplentes({ usuario, onLogout }) {
                             )
                           }
                         >
-                          <i className="bi bi-trash"></i>
                           Eliminar
-                        </button>
-                      )}
-
-                      {['eliminada', 'vencida'].includes(
-                        publicacion.estado
-                      ) && (
-                        <button
-                          type="button"
-                          className="danger"
-                          onClick={() =>
-                            quitarPublicacionDeMiLista(
-                              publicacion.id_disponibilidad
-                            )
-                          }
-                        >
-                          <i className="bi bi-trash"></i>
-                          Quitar
                         </button>
                       )}
                     </div>
@@ -1282,6 +1214,17 @@ function BancoSuplentes({ usuario, onLogout }) {
                         </div>
                       )}
 
+                      {solicitud.estado === 'aceptada' && telefonoVisible(solicitud.solicitante.contacto) && (
+                        <p className="bs-connected-contact">
+                          <i className="bi bi-telephone-fill"></i>
+                          <span>Teléfono:</span>{' '}
+                          <a href={`tel:${telefonoVisible(solicitud.solicitante.contacto).replace(/\D/g, '')}`}>
+                            {telefonoVisible(solicitud.solicitante.contacto)}
+                          </a>
+                        </p>
+                      )}
+
+
                       {solicitud.estado === 'aceptada' && (
                         <div className="bs-request-card__actions">
                           <button
@@ -1299,33 +1242,19 @@ function BancoSuplentes({ usuario, onLogout }) {
                             Contactar
                           </button>
 
-                          <button
-                            type="button"
-                            onClick={() =>
-                              navigate('/dashboardUsuario')
-                            }
-                          >
-                            Buscar cancha
-                          </button>
                         </div>
                       )}
 
-                      {solicitud.estado !== 'pendiente' && (
-                        <div className="bs-request-card__actions">
-                          <button
-                            type="button"
-                            className="danger"
-                            onClick={() =>
-                              quitarSolicitudDeMiLista(
-                                solicitud.id_solicitud
-                              )
-                            }
-                          >
-                            <i className="bi bi-trash"></i>
-                            Quitar
-                          </button>
-                        </div>
-                      )}
+                      <div className="bs-request-card__actions bs-request-card__actions--delete">
+                        <button
+                          type="button"
+                          className="danger"
+                          onClick={() => eliminarSolicitud(solicitud)}
+                        >
+                          <i className="bi bi-trash3"></i>
+                          Eliminar solicitud
+                        </button>
+                      </div>
                     </article>
                   ))
                 ) : (
@@ -1382,6 +1311,16 @@ function BancoSuplentes({ usuario, onLogout }) {
                         </button>
                       )}
 
+
+                      {solicitud.estado === 'aceptada' && telefonoVisible(solicitud.propietario.contacto) && (
+                        <p className="bs-connected-contact">
+                          <i className="bi bi-telephone-fill"></i>
+                          <span>Teléfono:</span>{' '}
+                          <a href={`tel:${telefonoVisible(solicitud.propietario.contacto).replace(/\D/g, '')}`}>
+                            {telefonoVisible(solicitud.propietario.contacto)}
+                          </a>
+                        </p>
+                      )}
                       {solicitud.estado === 'aceptada' && (
                         <div className="bs-request-card__actions">
                           <button
@@ -1405,27 +1344,21 @@ function BancoSuplentes({ usuario, onLogout }) {
                               navigate('/dashboardUsuario')
                             }
                           >
-                            Buscar cancha
+                            Elegir cancha
                           </button>
                         </div>
                       )}
 
-                      {solicitud.estado !== 'pendiente' && (
-                        <div className="bs-request-card__actions">
-                          <button
-                            type="button"
-                            className="danger"
-                            onClick={() =>
-                              quitarSolicitudDeMiLista(
-                                solicitud.id_solicitud
-                              )
-                            }
-                          >
-                            <i className="bi bi-trash"></i>
-                            Quitar
-                          </button>
-                        </div>
-                      )}
+                      <div className="bs-request-card__actions bs-request-card__actions--delete">
+                        <button
+                          type="button"
+                          className="danger"
+                          onClick={() => eliminarSolicitud(solicitud)}
+                        >
+                          <i className="bi bi-trash3"></i>
+                          Eliminar solicitud
+                        </button>
+                      </div>
                     </article>
                   ))
                 ) : (

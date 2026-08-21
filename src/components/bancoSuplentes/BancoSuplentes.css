@@ -870,8 +870,46 @@
   }
 }
 
+/* Contacto privado: se muestra únicamente cuando ambos jugadores conectaron. */
+.bs-connected-contact {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.75rem 0 0;
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
+  background: rgba(25, 135, 84, 0.08);
+  color: #234436;
+}
 
-.bs-own-list button i,
-.bs-request-card button i {
-  margin-right: 6px;
+.bs-connected-contact a {
+  color: #087bff;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.bs-request-card__actions--delete {
+  margin-top: 0.7rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+
+.bs-privacy-note {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.9rem 1rem;
+  border-radius: 12px;
+  background: rgba(8, 123, 255, 0.08);
+  color: #183153;
+}
+
+.bs-privacy-note strong {
+  font-size: 0.92rem;
+}
+
+.bs-privacy-note small {
+  color: #52647a;
+  line-height: 1.4;
 }

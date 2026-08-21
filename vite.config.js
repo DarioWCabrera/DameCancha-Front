@@ -19,8 +19,12 @@ export default defineConfig(({ command, mode }) => {
       throw new Error('VITE_API_URL debe ser una URL válida.');
     }
 
-    if (mode === 'production' && parsedUrl.protocol !== 'https:') {
-      throw new Error('VITE_API_URL debe utilizar HTTPS en producción.');
+    const isLocalBackend = ['localhost', '127.0.0.1', '::1'].includes(parsedUrl.hostname);
+
+    if (mode === 'production' && !isLocalBackend && parsedUrl.protocol !== 'https:') {
+      throw new Error(
+        'VITE_API_URL debe utilizar HTTPS para un backend remoto. Para pruebas locales se permite http://localhost.',
+      );
     }
   }
 

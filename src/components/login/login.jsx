@@ -126,6 +126,7 @@ const Login = ({ onLoginSuccess, onRegister, onRegisterClub }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [mostrarPassword, setMostrarPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
   const [recoveryStep, setRecoveryStep] = useState(1);
@@ -261,7 +262,7 @@ const Login = ({ onLoginSuccess, onRegister, onRegisterClub }) => {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: username, password }),
+      body: JSON.stringify({ email: username, password, rememberMe }),
     });
 
     const data = await response.json();
@@ -277,7 +278,7 @@ const Login = ({ onLoginSuccess, onRegister, onRegisterClub }) => {
       const response = await fetch(apiUrl('/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: username, password }),
+        body: JSON.stringify({ email: username, password, rememberMe }),
       });
 
       const data = await response.json();
@@ -320,6 +321,7 @@ const Login = ({ onLoginSuccess, onRegister, onRegisterClub }) => {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="login-input"
+                  autoComplete="email"
                   required
                 />
               </div>
@@ -338,6 +340,7 @@ const Login = ({ onLoginSuccess, onRegister, onRegisterClub }) => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="login-input login-input-password"
+                  autoComplete="current-password"
                   required
                 />
 
@@ -348,6 +351,19 @@ const Login = ({ onLoginSuccess, onRegister, onRegisterClub }) => {
                 ></i>
               </div>
             </div>
+
+            <label className="login-remember-row" htmlFor="login-remember">
+              <input
+                id="login-remember"
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+              />
+              <span>
+                <strong>Recordarme</strong>
+                <small>Mantener la sesión iniciada durante 30 días en este dispositivo.</small>
+              </span>
+            </label>
 
             <button type="submit" className="login-submit-button">
               <span>Ingresar</span>

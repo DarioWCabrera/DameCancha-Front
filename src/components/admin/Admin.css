@@ -14,7 +14,7 @@
 
   background-image:
     linear-gradient(rgba(120, 145, 155, 0.45), rgba(120, 145, 155, 0.45)),
-    url('src/components/inicio/backgroud1.png');
+    url('../inicio/backgroud1.png');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;

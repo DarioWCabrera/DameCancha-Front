@@ -1,5 +1,5 @@
 /* =========================================================
-   DASHBOARD USUARIO - CANCHASYA
+   DASHBOARD USUARIO - DAMECANCHA
    Archivo completo.
 
    Objetivos de esta versión:
@@ -141,35 +141,28 @@
 
 .dashboard-header {
   width: 100%;
-  height: 48px;
-  min-height: 48px;
+  min-height: 68px;
   flex-shrink: 0;
 
   padding: 0 22px;
   margin: 0 auto;
 
-  background: linear-gradient(135deg, var(--azul-principal), var(--azul-oscuro));
+  background: linear-gradient(
+    135deg,
+    var(--azul-principal),
+    var(--azul-oscuro)
+  );
   color: #ffffff;
   border-radius: 0 0 10px 10px;
   box-shadow: 0 8px 24px rgba(0, 93, 224, 0.28);
 
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(170px, 1fr) auto minmax(170px, 1fr);
   align-items: center;
+  gap: 18px;
 }
 
-.dashboard-header__brand {
-  display: flex;
-  align-items: center;
-  height: 100%;
-}
 
-.dashboard-header__logo-img {
-  height: 38px;
-  width: auto;
-  object-fit: contain;
-  display: block;
-}
 
 .dashboard-header__social {
   display: flex;
@@ -179,12 +172,15 @@
 }
 
 .dashboard-header__social a {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
+
   display: grid;
   place-items: center;
+
   color: #ffffff !important;
   text-decoration: none;
+  transition: transform 0.2s ease, opacity 0.2s ease;
 }
 
 .dashboard-header__social i,
@@ -195,12 +191,13 @@
 }
 
 .dashboard-header__social a:hover {
-  transform: translateY(-1px);
+  transform: translateY(-2px);
   opacity: 0.86;
 }
 
 .dashboard-header__user {
   justify-self: end;
+
   display: flex;
   align-items: center;
   gap: 9px;
@@ -212,8 +209,9 @@
 }
 
 .dashboard-header__avatar {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
   border-radius: 50%;
 
   display: grid;
@@ -221,13 +219,13 @@
 
   background: #ffffff;
   color: var(--azul-principal);
-  font-weight: 900;
   font-size: 13px;
+  font-weight: 900;
 }
 
 .dashboard-header__logout {
-  min-height: 30px;
-  padding: 0 10px;
+  min-height: 32px;
+  padding: 0 11px;
 
   border: 1px solid rgba(255, 255, 255, 0.65);
   border-radius: 7px;
@@ -237,6 +235,7 @@
   font-size: 12px;
   font-weight: 800;
   cursor: pointer;
+  transition: background 0.2s ease;
 }
 
 .dashboard-header__logout:hover {
@@ -1134,6 +1133,32 @@
   border-color: var(--azul-principal);
 }
 
+.time-card,
+.time-card--large {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+
+.time-card__hour {
+  line-height: 1;
+}
+
+.time-card__status {
+  display: block;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+}
+
+.time-card:disabled .time-card__status,
+.time-card--large:disabled .time-card__status {
+  color: #7b8490;
+}
+
 .time-grid__legend {
   grid-column: 1 / -1;
   justify-self: end;
@@ -1766,7 +1791,7 @@
 }
 
 /* =========================================================
-   17. SWEETALERT CANCHASYA
+   17. SWEETALERT DAMECANCHA
    Reemplaza confirm/alert nativos al modificar/cancelar.
 ========================================================= */
 
@@ -2890,7 +2915,7 @@
    - evita layout en dos columnas en ancho celular;
    - permite scroll vertical en mobile;
    - oculta banners laterales;
-   - acomoda wizard, cards, reservas, modal y botones de Mercado Pago.
+   - acomoda wizard, cards, reservas, modal y botones de acción.
 ========================================================= */
 
 @media (max-width: 1180px) {
@@ -3392,8 +3417,8 @@
    FIX MISTERX - RESPONSIVE RESERVAS + ESTADO DE PAGO
    - Evita que los badges rompan las cards.
    - Ordena acciones y menú de tres puntos.
-   - Da estilo específico a "Pagar reserva".
-   - Ajusta modal/SweetAlert de Mercado Pago en pantallas chicas.
+   - Da estilo específico a las acciones de reserva.
+   - Ajusta modal/SweetAlert de reserva en pantallas chicas.
 ========================================================= */
 
 .reservation-card {
@@ -3537,9 +3562,13 @@
 ========================================================= */
 
 .stage-content--clubs {
-  justify-content: flex-start;
-  overflow-y: auto;
+  justify-content: flex-start !important;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
   scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
 }
 
 .tournament-context-loading {
@@ -4154,90 +4183,109 @@
   }
 }
 
-/* =========================================================
-   FIX DEFINITIVO - SCROLL INTERNO PASO 2 / LISTADO DE CANCHAS
-   Problema:
-   - El dashboard no scrollea por diseño.
-   - .stage-content tenía overflow:hidden y centrado vertical.
-   - Si hay muchas canchas, las cards inferiores quedan cortadas.
 
-   Solución:
-   - En desktop, solo scrollea el contenido del paso 2.
-   - No se mueve toda la página.
-   - No se mueve el panel derecho "Mis Reservas".
+/* =========================================================
+   V4.4 - DISPONIBILIDAD VISIBLE ANTES DE SELECCIONAR
+========================================================= */
+.time-card--occupied,
+.time-card--occupied:disabled {
+  background: #eef1f4 !important;
+  color: #8d96a3 !important;
+  border-color: #d9dfe6 !important;
+  box-shadow: none !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+  opacity: 1 !important;
+}
+
+.time-card--occupied .time-card__hour,
+.time-card--occupied .time-card__status {
+  color: #8d96a3 !important;
+}
+
+.time-card--past,
+.time-card--past:disabled {
+  background: #edf0f4 !important;
+  color: #9aa3af !important;
+  border-color: #e0e4e9 !important;
+  cursor: not-allowed !important;
+  opacity: 1 !important;
+}
+
+.time-card--checking,
+.time-card--verification-error,
+.time-card--checking:disabled,
+.time-card--verification-error:disabled {
+  background: #f1f3f6 !important;
+  color: #8c96a4 !important;
+  border-color: #dde2e8 !important;
+  cursor: wait !important;
+  opacity: 1 !important;
+}
+
+.availability-inline-error {
+  width: min(100%, 720px);
+  margin: -6px auto 14px;
+  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid #f1c7c7;
+  border-radius: 10px;
+  background: #fff5f5;
+  color: #a12b2b;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* =========================================================
+   FIX MOBILE - SCROLL GENERAL DASHBOARD USUARIO
+   Evita que el Paso 2 / torneos atrape el scroll en celular
 ========================================================= */
 
-@media (min-width: 1181px) {
-  .booking-stage {
-    min-height: 0 !important;
-    height: 100% !important;
-    overflow: hidden !important;
-  }
+@media (max-width: 760px) {
 
-  .stage-content--clubs {
-    height: 100% !important;
-    min-height: 0 !important;
-    max-height: 100% !important;
-
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: flex-start !important;
-    align-items: stretch !important;
-
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-
-    padding-bottom: 28px !important;
-    padding-right: 18px !important;
-
-    scrollbar-gutter: stable;
-    overscroll-behavior: contain;
-  }
-
-  .stage-content--clubs .stage-heading,
-  .stage-content--clubs .tournament-context,
-  .stage-content--clubs .tournament-context-loading {
-    flex: 0 0 auto !important;
-  }
-
-  .clubs-selection-section {
-    flex: 0 0 auto !important;
-    min-height: 0 !important;
+  .dashboard-usuario {
     width: 100% !important;
-    padding-bottom: 22px !important;
+    height: auto !important;
+    min-height: 100dvh !important;
+
+    overflow-x: hidden !important;
+    overflow-y: visible !important;
   }
 
-  .clubs-grid,
-  .clubs-grid--large {
-    overflow: visible !important;
-  }
-
-  .stage-content--clubs::-webkit-scrollbar {
-    width: 10px;
-  }
-
-  .stage-content--clubs::-webkit-scrollbar-track {
-    background: rgba(225, 235, 248, 0.75);
-    border-radius: 999px;
-  }
-
-  .stage-content--clubs::-webkit-scrollbar-thumb {
-    background: rgba(8, 123, 255, 0.38);
-    border-radius: 999px;
-    border: 2px solid rgba(245, 249, 255, 0.95);
-  }
-
-  .stage-content--clubs::-webkit-scrollbar-thumb:hover {
-    background: rgba(8, 123, 255, 0.58);
-  }
-}
-
-/* En pantallas chicas dejamos que scrollee la página completa,
-   porque forzar scroll interno dentro del wizard empeora la usabilidad móvil. */
-@media (max-width: 1180px) {
+  .dashboard-usuario__overlay,
+  .dashboard-shell,
+  .dashboard-shell__main,
+  .dashboard-layout,
+  .booking-panel,
+  .booking-wizard,
+  .booking-stage,
+  .stage-content,
   .stage-content--clubs {
-    justify-content: flex-start !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-y: visible !important;
+  }
+
+  .booking-wizard {
     overflow: visible !important;
   }
-}
 
+  .booking-stage {
+    overflow-x: hidden !important;
+    overflow-y: visible !important;
+  }
+
+  .stage-content--clubs {
+    overflow-x: hidden !important;
+    overflow-y: visible !important;
+
+    overscroll-behavior: auto !important;
+    scrollbar-gutter: auto !important;
+    -webkit-overflow-scrolling: auto;
+  }
+}

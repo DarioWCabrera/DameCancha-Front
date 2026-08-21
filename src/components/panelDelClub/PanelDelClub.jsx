@@ -1,3 +1,4 @@
+import { apiUrl, mediaUrl } from '../../config/api';
 import React, { useEffect, useRef, useState } from 'react';
 import './PanelDelClub.css';
 import { horarios } from '../staticData';
@@ -24,46 +25,6 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
   const [mostrarModalSuscripcion, setMostrarModalSuscripcion] = useState(false);
 
-  const [updateFecha, setCheckPagoFecha] = useState(false);
-
-
-  /* funcion para chequear la fehca de pagos */
-  const handleCheckFechaPago = async () => {
-    try {
-      const token = localStorage.getItem('token'); // Asegúrate de que el token esté almacenado en localStorage
-      const response = await fetch("http://localhost:3000/dueno-cancha/fecha-vencimiento", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error("Error al traer la fecha de vencimiento");
-      }
-
-      const data = await response.json();
-
-      // Suponiendo que el backend devuelve algo como { fecha_vencimiento: "2026-05-20" }
-      const fecha = data.fecha_vencimiento;
-
-      console.log("Fecha de vencimiento:", fecha);
-
-      // Si querés guardarla en un estado de React:
-      // setFechaVencimiento(fecha);
-
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  useEffect(() => {
-    if (updateFecha) {
-      handleCheckFechaPago();
-    }
-  }, [updateFecha]);
-
   const abrirModalSuscripcion = () => {
     setMostrarModalSuscripcion(true);
   };
@@ -82,12 +43,6 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     Controla si se muestra o no el calendario simple dentro de próximas reservas.
   */
   const [showCalendar, setShowCalendar] = useState(false);
-
-  /*
-    Controla si la card lateral de próximas reservas muestra solo un resumen
-    o la lista ampliada. Evita que el dashboard crezca indefinidamente.
-  */
-  const [mostrarTodasLasReservasProximas, setMostrarTodasLasReservasProximas] = useState(false);
 
   const horariosIniciales = horarios.map((h) => h.id);
   const [horariosPorCancha, setHorariosPorCancha] = useState({});
@@ -226,7 +181,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
       return logo;
     }
 
-    return `http://localhost:3000${logo}`;
+    return mediaUrl(logo);
   };
 
   const logoClubUrl = construirUrlLogo(logoClubActual);
@@ -261,7 +216,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3000/club/${idClubActual}`, {
+      const response = await fetch(apiUrl(`/club/${idClubActual}`), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -391,7 +346,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
       data.append('logo', file);
 
-      const response = await fetch(`http://localhost:3000/club/${clubPrincipal.id_club}/logo`, {
+      const response = await fetch(apiUrl(`/club/${clubPrincipal.id_club}/logo`), {
         method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -448,7 +403,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
   const getWelcomeStorageKey = () => {
     const clubId = clubPrincipal?.id_club || 'sin-club';
-    return `canchasya_welcome_panel_seen_${clubId}`;
+    return `damecancha_welcome_panel_seen_${clubId}`;
   };
 
   const cerrarWelcomeModal = () => {
@@ -466,7 +421,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     if (!clubPrincipal?.id_club) return;
 
     const yaVioBienvenida = localStorage.getItem(
-      `canchasya_welcome_panel_seen_${clubPrincipal.id_club}`
+      `damecancha_welcome_panel_seen_${clubPrincipal.id_club}`
     );
 
     if (!yaVioBienvenida) {
@@ -504,15 +459,21 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     Al guardar se manda el número limpio que el usuario escribió.
   */
   const normalizarImporteDesdeBackend = (value) => {
-    const numero = limpiarImporte(value);
+    if (value === null || value === undefined || value === '') return 0;
 
-    if (!numero) return 0;
-
-    if (numero >= 1000000 && numero % 100 === 0) {
-      return Math.round(numero / 100);
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? value : 0;
     }
 
-    return numero;
+    const texto = String(value).trim();
+
+    // Los DECIMAL de MySQL suelen llegar como "40000.00".
+    if (/^-?\d+(?:\.\d{1,2})?$/.test(texto)) {
+      const numeroDecimal = Number(texto);
+      return Number.isFinite(numeroDecimal) ? numeroDecimal : 0;
+    }
+
+    return limpiarImporte(texto);
   };
 
   /*
@@ -628,10 +589,9 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
   useEffect(() => {
     const fetchCanchas = async () => {
       try {
-        console.log('Cargando canchas para club ID:', clubPrincipal?.id_club);
         const token = localStorage.getItem('token'); // Asegúrate de que el token esté almacenado en localStorage
         const response = await fetch(
-          `http://localhost:3000/cancha/club/${clubPrincipal?.id_club}`,
+          apiUrl(`/cancha/club/${idClubActual}`),
           {
             headers: {
               'Authorization': `Bearer ${token}`
@@ -644,7 +604,6 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
         }
 
         const data = await response.json();
-        console.log('Canchas cargadas:', data);
         setCanchas(data || []);
       } catch (error) {
         console.error('Error cargando canchas:', error);
@@ -652,18 +611,18 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
       }
     };
 
-    if (clubPrincipal?.id_club) {
+    if (idClubActual) {
       fetchCanchas();
     } else {
       console.warn('Club principal o ID de club no disponible', clubPrincipal);
     }
-  }, [clubPrincipal?.id_club]);
+  }, [idClubActual]);
 
   useEffect(() => {
     const fetchDeportes = async () => {
       try {
         const token = localStorage.getItem('token'); // Asegúrate de que el token esté almacenado en localStorage
-        const response = await fetch('http://localhost:3000/deporte', {
+        const response = await fetch(apiUrl('/deporte'), {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -705,7 +664,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
           canchas.map(async (cancha) => {
             const idCancha = getCanchaId(cancha);
             const response = await fetch(
-              `http://localhost:3000/disponibilidad/cancha/${idCancha}`,
+              apiUrl(`/disponibilidad/cancha/${idCancha}`),
               { headers: { 'Authorization': `Bearer ${token}` } }
             );
 
@@ -750,7 +709,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
       const disponibilidades = construirDisponibilidades(getHorariosDeCancha(idCancha));
       const token = localStorage.getItem('token');
 
-      const response = await fetch(`http://localhost:3000/disponibilidad/cancha/${idCancha}`, {
+      const response = await fetch(apiUrl(`/disponibilidad/cancha/${idCancha}`), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -871,7 +830,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
       }
 
       const response = await fetch(
-        `http://localhost:3000/bloqueo-cancha/cancha/${idCancha}`,
+        apiUrl(`/bloqueo-cancha/cancha/${idCancha}`),
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -986,7 +945,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
       }
 
       const response = await fetch(
-        'http://localhost:3000/bloqueo-cancha',
+        apiUrl('/bloqueo-cancha'),
         {
           method: 'POST',
           headers: {
@@ -1051,14 +1010,11 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     const confirmacion = await Swal.fire({
       icon: 'warning',
       title: 'Liberar turno',
-      html: `
-        <p>Vas a quitar el bloqueo del <strong>${formatearFechaBloqueo(
-          bloqueo.fecha
-        )}</strong>.</p>
-        <p><strong>${String(bloqueo.hora_inicio).slice(0, 5)} a ${String(
-          bloqueo.hora_fin
-        ).slice(0, 5)} hs</strong></p>
-      `,
+      text: `Vas a quitar el bloqueo del ${formatearFechaBloqueo(
+        bloqueo.fecha
+      )}, de ${String(bloqueo.hora_inicio).slice(0, 5)} a ${String(
+        bloqueo.hora_fin
+      ).slice(0, 5)} hs.`,
       showCancelButton: true,
       confirmButtonText: 'Sí, liberar',
       cancelButtonText: 'Volver',
@@ -1081,7 +1037,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
       }
 
       const response = await fetch(
-        `http://localhost:3000/bloqueo-cancha/${idBloqueo}`,
+        apiUrl(`/bloqueo-cancha/${idBloqueo}`),
         {
           method: 'DELETE',
           headers: {
@@ -1150,7 +1106,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
       return flyerUrl;
     }
 
-    return `http://localhost:3000${flyerUrl}`;
+    return mediaUrl(flyerUrl);
   };
 
   const obtenerIdDeporteTorneo = (torneo) =>
@@ -1225,7 +1181,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
       }
 
       const response = await fetch(
-        `http://localhost:3000/torneo/club/${idClubActual}`,
+        apiUrl(`/torneo/club/${idClubActual}`),
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -1413,8 +1369,8 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
       const esEdicion = Boolean(torneoEditandoId);
       const response = await fetch(
         esEdicion
-          ? `http://localhost:3000/torneo/${torneoEditandoId}`
-          : 'http://localhost:3000/torneo',
+          ? apiUrl(`/torneo/${torneoEditandoId}`)
+          : apiUrl('/torneo'),
         {
           method: esEdicion ? 'PATCH' : 'POST',
           headers: {
@@ -1499,7 +1455,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `http://localhost:3000/torneo/${torneo.id_torneo}/estado`,
+        apiUrl(`/torneo/${torneo.id_torneo}/estado`),
         {
           method: 'PATCH',
           headers: {
@@ -1558,10 +1514,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     const confirmacion = await Swal.fire({
       icon: 'warning',
       title: 'Cancelar torneo',
-      html: `
-        <p>Vas a cancelar <strong>${torneo.titulo}</strong>.</p>
-        <p>Dejará de mostrarse entre los torneos publicados.</p>
-      `,
+      text: `Vas a cancelar ${torneo.titulo}. Dejará de mostrarse entre los torneos publicados.`,
       showCancelButton: true,
       confirmButtonText: 'Sí, cancelar torneo',
       cancelButtonText: 'Volver',
@@ -1577,7 +1530,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `http://localhost:3000/torneo/${torneo.id_torneo}`,
+        apiUrl(`/torneo/${torneo.id_torneo}`),
         {
           method: 'DELETE',
           headers: {
@@ -1630,6 +1583,81 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     }
   };
 
+  const eliminarTorneo = async (torneo) => {
+    if (!torneo?.id_torneo) return;
+
+    const confirmacion = await Swal.fire({
+      icon: 'warning',
+      title: 'Eliminar torneo definitivamente',
+      text: `Vas a eliminar ${torneo.titulo} y su flyer. Esta acción no se puede deshacer.`,
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Volver',
+      confirmButtonColor: '#dc3545',
+      cancelButtonColor: '#64748b',
+      reverseButtons: true,
+    });
+
+    if (!confirmacion.isConfirmed) return;
+
+    setActualizandoEstadoTorneoId(torneo.id_torneo);
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(
+        apiUrl(`/torneo/${torneo.id_torneo}/eliminar`),
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await leerRespuestaHttp(response);
+
+      if (!response.ok) {
+        throw new Error(
+          obtenerMensajeError(
+            data,
+            `No se pudo eliminar el torneo. Error HTTP ${response.status}.`
+          )
+        );
+      }
+
+      setTorneos((prev) =>
+        prev.filter((item) => item.id_torneo !== torneo.id_torneo)
+      );
+
+      if (torneoEditandoId === torneo.id_torneo) {
+        cerrarFormularioTorneo();
+      }
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Torneo eliminado',
+        text: 'El torneo fue eliminado definitivamente del panel.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+    } catch (error) {
+      console.error('Error al eliminar torneo:', error);
+
+      Swal.fire({
+        icon: 'error',
+        title: 'No se pudo eliminar el torneo',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    } finally {
+      setActualizandoEstadoTorneoId(null);
+    }
+  };
+
   const handleAddCancha = async (e) => {
     e.preventDefault();
 
@@ -1655,7 +1683,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
     try {
       const token = localStorage.getItem('token'); // Asegúrate de que el token esté almacenado en localStorage
-      const response = await fetch('http://localhost:3000/cancha', {
+      const response = await fetch(apiUrl('/cancha'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1664,17 +1692,34 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
         body: JSON.stringify({
           nombre_cancha: newCancha.nombre,
           id_deporte: parseInt(newCancha.deporte),
-          id_club: clubPrincipal.id_club,
+          id_club: Number(idClubActual),
           precio_por_hora: precioLimpio,
           tipo_suelo: newCancha.tipo_suelo,
           descripcion_cancha: newCancha.descripcion,
         }),
       });
 
-      if (response.ok) {
-        const data = await response.json();
+      const responsePayload = await response.json().catch(() => ({}));
 
-        setCanchas((prev) => [...prev, data]);
+      if (response.ok) {
+        const data = responsePayload;
+
+        // Volvemos a consultar el listado completo para que el panel siempre refleje
+        // exactamente lo persistido en PostgreSQL/Neon.
+        try {
+          const refreshResponse = await fetch(apiUrl(`/cancha/club/${idClubActual}`), {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: 'no-store',
+          });
+          if (refreshResponse.ok) {
+            const refreshData = await refreshResponse.json();
+            setCanchas(Array.isArray(refreshData) ? refreshData : []);
+          } else {
+            setCanchas((prev) => [...prev, data]);
+          }
+        } catch {
+          setCanchas((prev) => [...prev, data]);
+        }
 
         Swal.fire({
           icon: 'success',
@@ -1701,10 +1746,14 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
         setShowAddCancha(false);
       } else {
+        const mensajeBackend = Array.isArray(responsePayload?.message)
+          ? responsePayload.message.join(' ')
+          : responsePayload?.message;
+
         Swal.fire({
           icon: 'error',
           title: 'No se pudo agregar la cancha',
-          text: 'Revisá los datos ingresados o intentá nuevamente.',
+          text: mensajeBackend || 'Revisá los datos ingresados o intentá nuevamente.',
           confirmButtonText: 'Aceptar',
           confirmButtonColor: '#ef4444',
           background: '#ffffff',
@@ -1834,11 +1883,12 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
         nombre_cancha: editCancha.nombre.trim(),
         id_deporte: idDeporte,
         precio_por_hora: precioLimpio,
+        tipo_suelo: editCancha.tipo_suelo.trim(),
         descripcion_cancha: editCancha.descripcion.trim(),
       };
 
       const response = await fetch(
-        `http://localhost:3000/cancha/${idCanchaNumerico}`,
+        apiUrl(`/cancha/${idCanchaNumerico}`),
         {
           method: 'PATCH',
           headers: {
@@ -1890,12 +1940,6 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
             ? {
               ...cancha,
               ...resultado,
-
-              /*
-               * El backend todavía no guarda tipo_suelo.
-               * Lo conservamos localmente para no alterar la interfaz.
-               */
-              tipo_suelo: editCancha.tipo_suelo,
             }
             : cancha
         )
@@ -1961,7 +2005,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:3000/cancha/${canchaId}`, {
+      const response = await fetch(apiUrl(`/cancha/${canchaId}`), {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -2012,7 +2056,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
     try {
       const token = localStorage.getItem('token'); // Asegúrate de que el token esté almacenado en localStorage
-      const response = await fetch(`http://localhost:3000/cancha/${canchaId}`, {
+      const response = await fetch(apiUrl(`/cancha/${canchaId}`), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -2045,17 +2089,39 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
 
   const normalizarFecha = (fecha) => {
-    const date = new Date(fecha);
-    if (isNaN(date.getTime())) return null;
-    return date.toISOString().split('T')[0];
+    if (!fecha) return null;
+
+    if (fecha instanceof Date) {
+      if (Number.isNaN(fecha.getTime())) return null;
+      const anio = fecha.getFullYear();
+      const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+      const dia = String(fecha.getDate()).padStart(2, '0');
+      return `${anio}-${mes}-${dia}`;
+    }
+
+    const texto = String(fecha).trim();
+    const iso = texto.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+
+    const visual = texto.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (visual) return `${visual[3]}-${visual[2]}-${visual[1]}`;
+
+    return null;
+  };
+
+  const crearFechaCalendario = (fecha) => {
+    const normalizada = normalizarFecha(fecha);
+    if (!normalizada) return null;
+    const [anio, mes, dia] = normalizada.split('-').map(Number);
+    return new Date(anio, mes - 1, dia);
   };
 
   /*
-    Formatea una fecha para mostrarla en pantalla.
+    Formatea una fecha para mostrarla en pantalla sin convertirla primero a UTC.
   */
   const formatearFecha = (fecha) => {
-    const date = new Date(fecha);
-    if (isNaN(date.getTime())) return 'Fecha inválida';
+    const date = crearFechaCalendario(fecha);
+    if (!date || Number.isNaN(date.getTime())) return 'Fecha inválida';
     return date.toLocaleDateString('es-ES');
   };
 
@@ -2073,23 +2139,34 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
   /*
     Las reservas llegan desde App.jsx ya asociadas al club actual.
+    Conservamos también las canceladas para poder calcular el historial de
+    cancelaciones por usuario, pero las excluimos de las métricas y agendas activas.
   */
   const reservasDelClub = reservas;
+
+  const esReservaCancelada = (reserva) => {
+    const estado = String(reserva?.estado || '').trim().toLowerCase();
+    return estado === 'cancelada' || estado === 'cancelado';
+  };
+
+  const reservasActivasDelClub = reservasDelClub.filter(
+    (reserva) => !esReservaCancelada(reserva)
+  );
 
   /*
     Reservas del día actual.
   */
-  const reservasDeHoy = reservasDelClub.filter(
+  const reservasDeHoy = reservasActivasDelClub.filter(
     (reserva) => normalizarFecha(reserva.fecha) === hoy
   );
 
   /*
     Reservas del mes actual.
   */
-  const reservasDelMes = reservasDelClub.filter((reserva) => {
-    const fechaReserva = new Date(reserva.fecha);
+  const reservasDelMes = reservasActivasDelClub.filter((reserva) => {
+    const fechaReserva = crearFechaCalendario(reserva.fecha);
 
-    if (isNaN(fechaReserva.getTime())) return false;
+    if (!fechaReserva || Number.isNaN(fechaReserva.getTime())) return false;
 
     return (
       fechaReserva.getMonth() === mesActual &&
@@ -2138,7 +2215,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
   const canchasProcesadas = canchas.map((cancha) => {
     const nombreDeporte = cancha.id_deporte?.nombre_deporte || 'Deporte';
 
-    const reservasDeLaCancha = reservas.filter(
+    const reservasDeLaCancha = reservasActivasDelClub.filter(
       (reserva) => reserva.id_cancha === cancha.id_cancha
     );
 
@@ -2173,7 +2250,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
   /*
     Lista de reservas próximas ordenadas por fecha y hora.
   */
-  const reservasProximas = reservasDelClub
+  const reservasProximas = reservasActivasDelClub
     .filter((reserva) => {
       const fecha = normalizarFecha(reserva.fecha);
       return fecha && fecha >= hoy;
@@ -2184,14 +2261,23 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
       return fechaA - fechaB;
     });
 
-  const LIMITE_RESERVAS_PROXIMAS = 6;
-  const reservasProximasVisibles = mostrarTodasLasReservasProximas
-    ? reservasProximas
-    : reservasProximas.slice(0, LIMITE_RESERVAS_PROXIMAS);
-  const hayMasReservasProximas =
-    reservasProximas.length > LIMITE_RESERVAS_PROXIMAS;
-  const cantidadReservasOcultas =
-    reservasProximas.length - LIMITE_RESERVAS_PROXIMAS;
+  /*
+    Historial simple de cancelaciones por usuario dentro de este club.
+    No bloquea automáticamente a nadie: solo le da al dueño información
+    para reconocer reincidencias y decidir cómo actuar.
+  */
+  const cancelacionesPorUsuario = reservasDelClub.reduce((acumulado, reserva) => {
+    const idUsuario = reserva.id_usuario;
+    const estado = String(reserva.estado || '').trim().toLowerCase();
+
+    if (!idUsuario || estado !== 'cancelada') return acumulado;
+
+    acumulado[idUsuario] = (acumulado[idUsuario] || 0) + 1;
+    return acumulado;
+  }, {});
+
+  const obtenerCancelacionesUsuario = (reserva) =>
+    reserva.id_usuario ? cancelacionesPorUsuario[reserva.id_usuario] || 0 : 0;
 
 
 
@@ -2926,7 +3012,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
             <div>
               <p>Reservas totales</p>
-              <h3>{reservasDelClub.length}</h3>
+              <h3>{reservasActivasDelClub.length}</h3>
               <span>Total programadas</span>
             </div>
           </div>
@@ -3057,7 +3143,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
           </div>
 
           {/* Panel de próximas reservas */}
-          <div className="pdc-panel pdc-upcoming-reservations-panel">
+          <div className="pdc-panel">
             <div className="pdc-panel-header">
               <h3>Próximas reservas</h3>
 
@@ -3073,49 +3159,49 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
             {reservasProximas.length === 0 ? (
               <p className="pdc-alert pdc-alert-info">No hay próximas reservas.</p>
             ) : (
-              <>
-                <div
-                  className={
-                    mostrarTodasLasReservasProximas
-                      ? 'pdc-upcoming-reservations-list pdc-upcoming-reservations-list-expanded'
-                      : 'pdc-upcoming-reservations-list'
-                  }
-                >
-                  {reservasProximasVisibles.map((reserva, index) => (
-                    <div className="pdc-reservation-row" key={reserva.id || index}>
-                      <span>{reserva.hora}</span>
+              reservasProximas.map((reserva, index) => (
+                <div className="pdc-reservation-row" key={reserva.id || index}>
+                  <span>{reserva.hora}</span>
 
-                      <div>
-                        <strong>{reserva.deporte}</strong>
-                        <p>{formatearFecha(reserva.fecha)}</p>
-                      </div>
+                  <div className="pdc-reservation-info">
+                    <strong>{reserva.deporte}</strong>
+                    <p>{formatearFecha(reserva.fecha)} · {reserva.cancha}</p>
 
-                      <small className="pdc-confirmed">Confirmada</small>
+                    <div className="pdc-reservation-client">
+                      <span>
+                        <i className="bi bi-person-fill"></i>
+                        {reserva.cliente_nombre || 'Usuario'}
+                      </span>
+
+                      {reserva.cliente_telefono && (
+                        <a href={`tel:${reserva.cliente_telefono}`}>
+                          <i className="bi bi-telephone-fill"></i>
+                          {reserva.cliente_telefono}
+                        </a>
+                      )}
+
+                      {obtenerCancelacionesUsuario(reserva) > 0 && (
+                        <small
+                          className={`pdc-cancellation-count ${
+                            obtenerCancelacionesUsuario(reserva) >= 2 ? 'is-warning' : ''
+                          }`}
+                          title="Cancelaciones registradas por este usuario en tu club"
+                        >
+                          {obtenerCancelacionesUsuario(reserva)} {
+                            obtenerCancelacionesUsuario(reserva) === 1
+                              ? 'cancelación previa'
+                              : 'cancelaciones previas'
+                          }
+                        </small>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  </div>
 
-                {hayMasReservasProximas && (
-                  <button
-                    type="button"
-                    className="pdc-see-more-reservations-button"
-                    onClick={() =>
-                      setMostrarTodasLasReservasProximas((valorActual) => !valorActual)
-                    }
-                  >
-                    {mostrarTodasLasReservasProximas
-                      ? 'Ver menos'
-                      : `Ver más (${cantidadReservasOcultas})`}
-                    <i
-                      className={
-                        mostrarTodasLasReservasProximas
-                          ? 'bi bi-chevron-up'
-                          : 'bi bi-chevron-down'
-                      }
-                    ></i>
-                  </button>
-                )}
-              </>
+                  <small className="pdc-confirmed">
+                    {reserva.estado || 'Confirmada'}
+                  </small>
+                </div>
+              ))
             )}
 
             {/* Calendario simple desplegable */}
@@ -3133,7 +3219,13 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                         <span>{reserva.hora}</span>
                       </div>
 
-                      <p>{reserva.deporte}</p>
+                      <div className="pdc-calendar-reservation-detail">
+                        <p>{reserva.deporte}</p>
+                        <small>{reserva.cliente_nombre || 'Usuario'}</small>
+                        {reserva.cliente_telefono && (
+                          <a href={`tel:${reserva.cliente_telefono}`}>{reserva.cliente_telefono}</a>
+                        )}
+                      </div>
                     </div>
                   ))
                 )}
@@ -3558,6 +3650,17 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                             </button>
                           )}
 
+                          <button
+                            type="button"
+                            className="pdc-tournament-action pdc-tournament-action--cancel"
+                            onClick={() => eliminarTorneo(torneo)}
+                            disabled={actualizando}
+                            title="Eliminar torneo definitivamente"
+                          >
+                            <i className="bi bi-trash3"></i>
+                            Eliminar
+                          </button>
+
                           {actualizando && (
                             <span className="pdc-tournament-updating">
                               Actualizando...
@@ -3654,7 +3757,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
               <h2>¡Gracias por sumarte, {nombreDueno}!</h2>
 
               <p>
-                Nos alegra que tu club forme parte de DameCancha!. Desde este panel
+                Nos alegra que tu club forme parte de DameCancha. Desde este panel
                 vas a poder gestionar tus canchas, revisar reservas y controlar
                 tus ingresos diarios y mensuales, como asi también agregar un logo
                 si no lo hiciste al momento de completar el formulario.

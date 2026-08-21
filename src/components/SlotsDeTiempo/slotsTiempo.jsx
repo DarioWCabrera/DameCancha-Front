@@ -3,6 +3,19 @@ import Swal from 'sweetalert2';
 import { horarios } from '../staticData';
 import './slotTiempo.css';
 
+const fechaCalendario = (valor) => {
+  if (!valor) return '';
+  if (valor instanceof Date) {
+    const anio = valor.getFullYear();
+    const mes = String(valor.getMonth() + 1).padStart(2, '0');
+    const dia = String(valor.getDate()).padStart(2, '0');
+    return `${anio}-${mes}-${dia}`;
+  }
+  const texto = String(valor).trim();
+  const iso = texto.match(/^(\d{4}-\d{2}-\d{2})/);
+  return iso ? iso[1] : texto;
+};
+
 const TimeSlots = ({
   date,
   sport,
@@ -28,14 +41,12 @@ const TimeSlots = ({
     let ocupadoPorReserva = false;
 
     if (reservas.length > 0 && date && idCancha) {
-      const fechaSeleccionadaStr = date.toISOString().split('T')[0];
+      const fechaSeleccionadaStr = fechaCalendario(date);
 
       ocupadoPorReserva = reservas.some((reserva) => {
         if (!reserva.fecha || !reserva.hora) return false;
 
-        const fechaReservaStr = new Date(reserva.fecha)
-          .toISOString()
-          .split('T')[0];
+        const fechaReservaStr = fechaCalendario(reserva.fecha);
 
         const mismaCancha = reserva.id_cancha === idCancha;
         const mismaFecha = fechaReservaStr === fechaSeleccionadaStr;

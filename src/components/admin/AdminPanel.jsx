@@ -2,7 +2,7 @@ import { apiUrl } from '../../config/api';
 import React, { useState, useEffect } from 'react';
 import './Admin.css';
 
-const AdminPanel = ({ adminUser, onLogout, clubesRegistrados = [], setClubesRegistrados }) => {
+const AdminPanel = ({ adminUser, onLogout }) => {
   const [showSettings, setShowSettings] = useState(false);
   const [newAdminNombre, setNewAdminNombre] = useState('');
   const [newAdminApellido, setNewAdminApellido] = useState('');
@@ -12,28 +12,9 @@ const AdminPanel = ({ adminUser, onLogout, clubesRegistrados = [], setClubesRegi
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const [clubesPendientes, setClubesPendientes] = useState([]);
   const [clubesAceptados, setClubesAceptados] = useState([]);
 
-  // Cargar clubes pendientes desde la base de datos
-  const fetchClubesPendientes = async () => {
-    try {
-      const token = localStorage.getItem('token'); // Asegúrate de que el token esté almacenado en localStorage
-      const response = await fetch(apiUrl('/club/pendientes'), {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setClubesPendientes(data);
-      }
-    } catch (error) {
-      console.error('Error al cargar clubes pendientes:', error);
-    }
-  };
-
+  // Los clubes se incorporan automáticamente y se administran desde esta lista.
   // Cargar clubes aceptados desde la base de datos
   const fetchClubesAceptados = async () => {
     try {
@@ -81,7 +62,6 @@ const AdminPanel = ({ adminUser, onLogout, clubesRegistrados = [], setClubesRegi
 
   // Cargar datos al montar el componente
   useEffect(() => {
-    fetchClubesPendientes();
     fetchClubesAceptados();
     fetchAdmins();
   }, []);
@@ -177,51 +157,8 @@ const AdminPanel = ({ adminUser, onLogout, clubesRegistrados = [], setClubesRegi
     }
   };
 
-  const acceptClub = async (clubId) => {
-    try {
-      const token = localStorage.getItem('token'); // Asegúrate de que el token esté almacenado en localStorage
-      const response = await fetch(apiUrl(`/club/${clubId}/aceptar`), {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+  // Los clubes nuevos quedan activos de inmediato. El admin puede inactivarlos o reactivarlos.
 
-      if (response.ok) {
-        // Actualizar la lista de clubes pendientes y aceptados
-        fetchClubesPendientes();
-        fetchClubesAceptados();
-      } else {
-        console.error('Error al aceptar el club');
-      }
-    } catch (error) {
-      console.error('Error al aceptar el club:', error);
-    }
-  };
-
-  const rejectClub = async (clubId) => {
-    try {
-      const token = localStorage.getItem('token'); // Asegúrate de que el token esté almacenado en localStorage
-      const response = await fetch(apiUrl(`/club/${clubId}/rechazar`), {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        // Actualizar la lista de clubes pendientes
-        fetchClubesPendientes();
-      } else {
-        console.error('Error al rechazar el club');
-      }
-    } catch (error) {
-      console.error('Error al rechazar el club:', error);
-    }
-  };
-
-  // Los clubes pendientes y aceptados ahora se cargan desde la base de datos
-  // No es necesario filtrar clubesRegistrados
 
   return (
     <div className="admin-panel-container">
@@ -346,55 +283,15 @@ const AdminPanel = ({ adminUser, onLogout, clubesRegistrados = [], setClubesRegi
         </div>
       )}
 
-      {/* Sección de Solicitudes Pendientes */}
+      {/* Gestión de clubes: altas automáticas, con posibilidad de inactivar/reactivar. */}
+      {/* Sección de Clubes Registrados */}
       <div className="admin-section">
         <h2 className="admin-section-title">
-          Solicitudes de Clubes Pendientes ({clubesPendientes.length})
-        </h2>
-        
-        {clubesPendientes.length === 0 ? (
-          <p className="admin-no-items">No hay solicitudes pendientes</p>
-        ) : (
-          <div className="admin-clubs-grid">
-            {clubesPendientes.map(club => (
-              <div key={club.id} className="admin-club-card">
-                <div className="admin-club-header">
-                  <h3>{club.nombre || club.razonSocial}</h3>
-                  <span className="admin-badge-pending">Pendiente</span>
-                </div>
-                <div className="admin-club-details">
-                  <p><strong>Email:</strong> {club.email || 'No disponible'}</p>
-                  <p><strong>Teléfono:</strong> {club.telefono || 'No disponible'}</p>
-                  <p><strong>Deportes:</strong> {club.canchas?.join(', ') || 'No especificados'}</p>
-                </div>
-                <div className="admin-club-actions">
-                  <button
-                    className="admin-btn-accept"
-                    onClick={() => acceptClub(club.id)}
-                  >
-                    <i className="bi bi-check-circle"></i> Aceptar
-                  </button>
-                  <button
-                    className="admin-btn-reject"
-                    onClick={() => rejectClub(club.id)}
-                  >
-                    <i className="bi bi-x-circle"></i> Rechazar
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Sección de Clubes Aceptados */}
-      <div className="admin-section">
-        <h2 className="admin-section-title">
-          Clubes Aceptados ({clubesAceptados.length})
+          Clubes registrados ({clubesAceptados.length})
         </h2>
         
         {clubesAceptados.length === 0 ? (
-          <p className="admin-no-items">No hay clubes aceptados aún</p>
+          <p className="admin-no-items">No hay clubes registrados aún</p>
         ) : (
           <div className="admin-clubs-grid">
             {clubesAceptados.map(club => (

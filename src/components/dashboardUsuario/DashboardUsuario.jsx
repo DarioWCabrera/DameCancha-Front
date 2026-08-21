@@ -1,11 +1,10 @@
 import { API_URL, apiUrl, mediaUrl } from '../../config/api';
-import { CONTACT, emailHref } from '../../config/contact';
+import { CONTACT } from '../../config/contact';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import Swal from 'sweetalert2';
 import 'sweetalert2/dist/sweetalert2.min.css';
 import './DashboardUsuario.css';
-import { initMercadoPago, Wallet } from '@mercadopago/sdk-react';
 import ClubUbicacionMapa, { construirUbicacionCompleta } from './ClubUbicacionMapa';
 import BancoSuplentesCard from '../bancoSuplentes/BancoSuplentesCard';
 // import { useAuth } from '../../hooks/useAuth';
@@ -33,14 +32,6 @@ import bannerImg3 from '../bannerVertical/banners/img3.webp';
 import bannerImg4 from '../bannerVertical/banners/img4.webp';
 import bannerImg5 from '../bannerVertical/banners/img5.webp';
 import bannerImg6 from '../bannerVertical/banners/img6.webp';
-
-const MERCADOPAGO_PUBLIC_KEY = import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY;
-
-if (MERCADOPAGO_PUBLIC_KEY) {
-  initMercadoPago(MERCADOPAGO_PUBLIC_KEY, {
-    locale: 'es-AR',
-  });
-}
 
 /*
   Lista temporal de deportes.
@@ -181,28 +172,6 @@ const normalizarHoraParaComparar = (horaValor) => {
   if (Number.isNaN(hora) || Number.isNaN(minutos)) return '';
 
   return `${String(hora).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
-};
-
-/*
-  Obtiene el id de cancha sin depender de una única forma de respuesta.
-  Soporta reservas aplanadas y reservas con la relación cancha anidada.
-*/
-const obtenerIdCanchaReserva = (reserva) =>
-  reserva?.id_cancha ??
-  reserva?.cancha_id ??
-  reserva?.cancha?.id_cancha ??
-  reserva?.cancha?.id ??
-  null;
-
-const obtenerNombreCanchaReserva = (reserva) => {
-  if (typeof reserva?.cancha === 'string') return reserva.cancha;
-
-  return (
-    reserva?.cancha?.nombre ||
-    reserva?.cancha?.nombre_cancha ||
-    reserva?.nombre_cancha ||
-    ''
-  );
 };
 
 /*
@@ -444,9 +413,9 @@ const normalizarServiciosClub = (serviciosValor) => {
 const obtenerServiciosCancha = (cancha) =>
   normalizarServiciosClub(
     cancha?.clubServicios ||
-      cancha?.servicios ||
-      cancha?.servicios_club ||
-      ''
+    cancha?.servicios ||
+    cancha?.servicios_club ||
+    ''
   );
 
 const obtenerClaveCancha = (cancha) => {
@@ -514,8 +483,10 @@ const obtenerClaseEstadoReserva = (estado) => {
   Mantiene separado el estado de la reserva del estado del pago.
 */
 const normalizarEstadoPago = (estadoPago) => {
-  const estado = normalizarTexto(estadoPago || 'pendiente');
+  const estado = normalizarTexto(estadoPago || 'pago_en_club');
 
+  // Se conserva únicamente para reservas históricas que ya hayan quedado
+  // registradas como pagadas antes de retirar Mercado Pago de DameCancha.
   if (
     estado === 'pagado' ||
     estado === 'approved' ||
@@ -526,90 +497,39 @@ const normalizarEstadoPago = (estadoPago) => {
     return 'pagado';
   }
 
-  if (
-    estado === 'pago_en_club' ||
-    estado === 'pago en club' ||
-    estado === 'paid_on_site'
-  ) {
-    return 'pago_en_club';
-  }
-
-  if (
-    estado === 'rechazado' ||
-    estado === 'rejected' ||
-    estado === 'rejected_demo' ||
-    estado === 'failure'
-  ) {
-    return 'rechazado';
-  }
-
-  return 'pendiente';
+  // Desde esta versión todas las reservas nuevas se abonan presencialmente.
+  return 'pago_en_club';
 };
 
-const obtenerTextoEstadoPago = (estadoPago) => {
-  const estado = normalizarEstadoPago(estadoPago);
-
-  if (estado === 'pagado') return 'Pagada online';
-  if (estado === 'pago_en_club') return 'Pago en club';
-  if (estado === 'rechazado') return 'Pago rechazado';
-
-  return 'Pago pendiente';
-};
-
-const obtenerClaseEstadoPago = (estadoPago) => {
-  const estado = normalizarEstadoPago(estadoPago);
-
-  if (estado === 'pagado' || estado === 'pago_en_club') {
-    return 'status status--confirmed';
-  }
-
-  if (estado === 'rechazado') {
-    return 'status status--blocked';
-  }
-
-  return 'status status--pending';
-};
+const obtenerTextoEstadoPago = (estadoPago) =>
+  normalizarEstadoPago(estadoPago) === 'pagado'
+    ? 'Pago registrado'
+    : 'Abonar en el club';
 
 const reservaEstaPagada = (reserva) => {
   if (!reserva) return false;
 
-  const estadoPago = normalizarEstadoPago(
+  return normalizarEstadoPago(
     reserva.estado_pago || reserva.mercado_pago_status
-  );
-
-  return ['pagado', 'pago_en_club'].includes(estadoPago);
-};
-
-const puedePagarReserva = (reserva) => {
-  if (!reserva) return false;
-  if (esReservaPasada(reserva)) return false;
-
-  const estadoReserva = normalizarTexto(reserva.estado || '');
-
-  if (estadoReserva.includes('cancelada') || estadoReserva.includes('cancelado')) {
-    return false;
-  }
-
-  return !reservaEstaPagada(reserva);
+  ) === 'pagado';
 };
 
 const puedeEliminarReserva = (reserva) => {
   if (!reserva) return false;
 
-  /*
-    Regla de negocio:
-    si la reserva ya está pagada, no se puede eliminar/cancelar desde el usuario.
-    Solo se permite modificarla mientras cumpla la regla de anticipación.
-  */
+  // Las reservas históricas que ya fueron cobradas online se conservan sin
+  // cancelación automática para no introducir un flujo de reembolso inexistente.
   if (reservaEstaPagada(reserva)) return false;
 
   return reserva.puedeGestionar || esReservaPasada(reserva);
 };
 
 const esReservaPasada = (reserva) => {
-  if (!reserva?.fechaHoraDate) return false;
+  const finTurno = reserva?.fechaHoraFinDate || reserva?.fechaHoraDate;
+  if (!finTurno) return false;
 
-  return reserva.fechaHoraDate < new Date();
+  // La reserva deja de estar activa cuando termina el turno, no cuando empieza.
+  return finTurno < new Date();
 };
 
 /*
@@ -624,6 +544,19 @@ const normalizarReserva = (reserva, listaClubes = []) => {
   const horaNormalizada = reserva.hora || reserva.hora_inicio?.slice(0, 5) || '';
   const fechaDate = crearFechaDesdeTexto(fechaStr);
   const fechaHoraDate = crearFechaHoraDesdeReserva(fechaStr, horaNormalizada);
+  const horaFinNormalizada =
+    reserva.hora_fin?.slice?.(0, 5) ||
+    reserva.horaFin?.slice?.(0, 5) ||
+    '';
+  let fechaHoraFinDate = horaFinNormalizada
+    ? crearFechaHoraDesdeReserva(fechaStr, horaFinNormalizada)
+    : null;
+
+  // Compatibilidad con reservas históricas sin hora_fin: el turno dura 1 hora.
+  if (!fechaHoraFinDate && fechaHoraDate) {
+    fechaHoraFinDate = new Date(fechaHoraDate.getTime() + 60 * 60 * 1000);
+  }
+
   const clubEncontrado = buscarClubPorNombre(reserva.club, listaClubes);
   const puedeGestionarCalculado = puedeGestionarPorAnticipacion(fechaHoraDate);
   const estadoPagoNormalizado = normalizarEstadoPago(reserva.estado_pago || reserva.mercado_pago_status);
@@ -662,6 +595,7 @@ const normalizarReserva = (reserva, listaClubes = []) => {
     }),
     fechaDate,
     fechaHoraDate,
+    fechaHoraFinDate,
   };
 };
 
@@ -710,6 +644,10 @@ const mostrarExito = (titulo, texto) => {
   deporte → club → fecha → horario → confirmación.
   También muestra las reservas reales recibidas desde App.jsx.
 */
+const gmailComposeUrl = CONTACT.email
+  ? `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(CONTACT.email)}`
+  : '';
+
 function DashboardUsuario({
   usuario,
   reservas = [],
@@ -730,7 +668,7 @@ function DashboardUsuario({
   const [fechaSeleccionada, setFechaSeleccionada] = useState(null);
   const [horarioSeleccionado, setHorarioSeleccionado] = useState(null);
   const [clubesActivos, setClubesActivos] = useState([]);
-  
+
 
 
   /*
@@ -799,6 +737,7 @@ function DashboardUsuario({
   const [reservasDelServidor, setReservasDelServidor] = useState([]);
   const [cargandoReservasDelServidor, setCargandoReservasDelServidor] =
     useState(false);
+  const [errorDisponibilidad, setErrorDisponibilidad] = useState('');
 
   const obtenerReservasDelServidor = async (signal) => {
     const idCancha =
@@ -809,8 +748,9 @@ function DashboardUsuario({
 
     const token = localStorage.getItem('token');
     const response = await fetch(
-      `${API_URL}/reserva/disponibilidad/${idCancha}/${fecha}`,
+      `${API_URL}/reserva/disponibilidad/${idCancha}/${fecha}?_=${Date.now()}`,
       {
+        cache: 'no-store',
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -828,30 +768,49 @@ function DashboardUsuario({
 
   /*
     Cada vez que cambia la cancha o la fecha, vuelve a consultar al backend.
-    De esta forma, el selector no depende solamente del estado local del usuario
-    y también reconoce reservas creadas por otras personas.
+    La consulta SIEMPRE se hace por id de cancha + fecha: si un club tiene
+    dos canchas del mismo deporte, una reserva en la cancha A no bloquea la B.
+
+    Mientras el usuario permanece en la selección de horarios se refresca
+    periódicamente para que un turno tomado por otra persona se pinte como
+    ocupado sin esperar a que el usuario intente confirmarlo.
   */
   useEffect(() => {
     if (!canchaSeleccionada || !fechaSeleccionada) {
       setReservasDelServidor([]);
+      setErrorDisponibilidad('');
+      setCargandoReservasDelServidor(false);
       return undefined;
     }
 
-    const controller = new AbortController();
+    let activo = true;
+    let controller = null;
 
-    const cargarReservasOcupadas = async () => {
-      setCargandoReservasDelServidor(true);
+    const cargarReservasOcupadas = async ({ silencioso = false } = {}) => {
+      controller?.abort();
+      controller = new AbortController();
+
+      if (!silencioso) {
+        setCargandoReservasDelServidor(true);
+      }
 
       try {
         const data = await obtenerReservasDelServidor(controller.signal);
+
+        if (!activo) return;
+
         setReservasDelServidor(data);
+        setErrorDisponibilidad('');
       } catch (error) {
-        if (error?.name !== 'AbortError') {
-          console.error('Error al consultar horarios ocupados:', error);
-          setReservasDelServidor([]);
-        }
+        if (!activo || error?.name === 'AbortError') return;
+
+        console.error('Error al consultar horarios ocupados:', error);
+        setReservasDelServidor([]);
+        setErrorDisponibilidad(
+          'No pudimos verificar la disponibilidad. Reintentá en unos segundos.'
+        );
       } finally {
-        if (!controller.signal.aborted) {
+        if (activo && !silencioso) {
           setCargandoReservasDelServidor(false);
         }
       }
@@ -859,7 +818,24 @@ function DashboardUsuario({
 
     cargarReservasOcupadas();
 
-    return () => controller.abort();
+    const intervalo = window.setInterval(() => {
+      cargarReservasOcupadas({ silencioso: true });
+    }, 10000);
+
+    const actualizarAlVolver = () => {
+      if (document.visibilityState === 'visible') {
+        cargarReservasOcupadas({ silencioso: true });
+      }
+    };
+
+    document.addEventListener('visibilitychange', actualizarAlVolver);
+
+    return () => {
+      activo = false;
+      controller?.abort();
+      window.clearInterval(intervalo);
+      document.removeEventListener('visibilitychange', actualizarAlVolver);
+    };
   }, [canchaSeleccionada, fechaSeleccionada]);
 
   /*
@@ -1035,10 +1011,6 @@ function DashboardUsuario({
   */
   const [mostrarModalReserva, setMostrarModalReserva] = useState(false);
   const [reservaConfirmada, setReservaConfirmada] = useState(null);
-  const [mercadoPagoPreferenceId, setMercadoPagoPreferenceId] = useState(null);
-  const [preparandoMercadoPago, setPreparandoMercadoPago] = useState(false);
-  const preferenciaSolicitadaParaReservaRef = useRef(null);
-
 
   useEffect(() => {
     if (!torneoSeleccionado) return undefined;
@@ -1070,162 +1042,16 @@ function DashboardUsuario({
   const [reservaEnEdicion, setReservaEnEdicion] = useState(null);
   const [reservasEliminadas, setReservasEliminadas] = useState([]);
   const [enviandoReserva, setEnviandoReserva] = useState(false);
+  const [ahoraPanel, setAhoraPanel] = useState(() => new Date());
 
-  /*
-    Guarda cambios locales de estado de pago después de simular o completar un pago.
-    Esto evita que la UI quede mostrando "Pago pendiente" mientras el backend ya marcó la reserva como pagada.
-  */
-  const [estadoPagoLocalPorReserva, setEstadoPagoLocalPorReserva] = useState({});
-
-  const actualizarEstadoPagoLocal = (reservaId, datosPago = {}) => {
-    if (!reservaId) return;
-
-    setEstadoPagoLocalPorReserva((prev) => ({
-      ...prev,
-      [String(reservaId)]: {
-        ...(prev[String(reservaId)] || {}),
-        ...datosPago,
-      },
-    }));
-  };
-
-  /*
-    Al volver de Checkout Pro, consulta el backend hasta que el webhook
-    haya persistido el resultado. Así el frontend nunca confía únicamente
-    en los parámetros de retorno enviados por el navegador.
-  */
+  // Mantiene "Mis reservas" actualizado aunque el dashboard quede abierto.
+  // Al finalizar un turno, deja de mostrarse sin necesitar recargar la página.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const paymentResult = params.get('payment');
-    const reservaId = params.get('reservaId');
+    const intervalo = window.setInterval(() => {
+      setAhoraPanel(new Date());
+    }, 60000);
 
-    if (!paymentResult || !reservaId) return;
-
-    let cancelado = false;
-
-    const limpiarParametrosPago = () => {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('payment');
-      url.searchParams.delete('reservaId');
-      window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
-    };
-
-    const esperar = (milisegundos) =>
-      new Promise((resolve) => setTimeout(resolve, milisegundos));
-
-    const consultarResultado = async () => {
-      const token = localStorage.getItem('token');
-      let ultimoEstado = 'pendiente';
-      let ultimoResultado = null;
-
-      try {
-        for (let intento = 0; intento < 6; intento += 1) {
-          const response = await fetch(
-            `${API_URL}/pago/mercadopago/status/${reservaId}`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
-
-          const data = await response.json();
-
-          if (!response.ok) {
-            throw new Error(
-              data?.message ||
-                'No se pudo consultar el estado del pago.'
-            );
-          }
-
-          ultimoResultado = data;
-          ultimoEstado = normalizarEstadoPago(
-            data.estado_pago || data.mercado_pago_status
-          );
-
-          if (
-            ultimoEstado === 'pagado' ||
-            ultimoEstado === 'rechazado'
-          ) {
-            break;
-          }
-
-          if (intento < 5) {
-            await esperar(1500);
-          }
-        }
-
-        if (cancelado) return;
-
-        actualizarEstadoPagoLocal(reservaId, {
-          estado_pago: ultimoEstado,
-          mercado_pago_status:
-            ultimoResultado?.mercado_pago_status || null,
-          mercado_pago_payment_id:
-            ultimoResultado?.mercado_pago_payment_id || null,
-          monto_pagado:
-            ultimoResultado?.monto_pagado || null,
-          fecha_pago:
-            ultimoResultado?.fecha_pago || null,
-        });
-
-        if (onRefreshReservas) {
-          await onRefreshReservas();
-        }
-
-        setMostrarModalReserva(false);
-        setReservaConfirmada(null);
-        setMenuReservaAbierto(null);
-        reiniciarReserva();
-
-        if (ultimoEstado === 'pagado') {
-          mostrarExito(
-            'Pago aprobado',
-            'Tu reserva fue pagada correctamente con Mercado Pago.'
-          );
-        } else if (
-          ultimoEstado === 'rechazado' ||
-          paymentResult === 'failure'
-        ) {
-          mostrarError(
-            'Pago rechazado',
-            'Mercado Pago no pudo aprobar el pago. Podés intentarlo nuevamente.'
-          );
-        } else {
-          await Swal.fire({
-            icon: 'info',
-            title: 'Pago pendiente',
-            text: 'Mercado Pago todavía está procesando el pago. El estado se actualizará automáticamente.',
-            confirmButtonText: 'Aceptar',
-            customClass: {
-              popup: 'cy-alert-popup',
-              title: 'cy-alert-title',
-              htmlContainer: 'cy-alert-text',
-              confirmButton: 'cy-alert-button',
-            },
-          });
-        }
-      } catch (error) {
-        console.error(
-          'Error al verificar el retorno de Mercado Pago:',
-          error
-        );
-
-        mostrarError(
-          'No se pudo verificar el pago',
-          error.message ||
-            'La reserva seguirá visible y podrás consultar su estado nuevamente.'
-        );
-      } finally {
-        limpiarParametrosPago();
-      }
-    };
-
-    consultarResultado();
-
-    return () => {
-      cancelado = true;
-    };
+    return () => window.clearInterval(intervalo);
   }, []);
 
   /*
@@ -1461,47 +1287,44 @@ function DashboardUsuario({
     Este bloque reemplaza el viejo RESERVAS_MOCK.
   */
   const reservasDelUsuario = useMemo(() => {
+    const ahora = ahoraPanel;
+
     return reservas
       .map((reserva) => normalizarReserva(reserva, clubesActivos))
       .filter(Boolean)
-      .map((reserva) => {
-        const pagoLocal =
-          estadoPagoLocalPorReserva[String(reserva.id)] ||
-          estadoPagoLocalPorReserva[String(reserva.id_reserva)] ||
-          null;
-
-        return pagoLocal
-          ? {
-              ...reserva,
-              ...pagoLocal,
-              estado_pago: normalizarEstadoPago(
-                pagoLocal.estado_pago || reserva.estado_pago || reserva.mercado_pago_status
-              ),
-            }
-          : reserva;
-      })
       .filter((reserva) => !reservasEliminadas.includes(reserva.id))
+      .filter((reserva) => {
+        const estado = normalizarTexto(reserva.estado || '');
+        const cancelada =
+          estado.includes('cancelada') || estado.includes('cancelado');
+
+        if (cancelada) return false;
+
+        // En el panel mostramos el turno hasta su hora de finalización.
+        // El histórico se conserva completo en la base para reportes,
+        // cancelaciones y métricas del club.
+        const finTurno = reserva.fechaHoraFinDate || reserva.fechaHoraDate;
+        return finTurno ? finTurno >= ahora : false;
+      })
       .sort((a, b) => {
         const fechaA = a.fechaHoraDate?.getTime?.() || 0;
         const fechaB = b.fechaHoraDate?.getTime?.() || 0;
 
         return fechaA - fechaB;
       });
-  }, [reservas, clubesActivos, reservasEliminadas, estadoPagoLocalPorReserva]);
+  }, [reservas, clubesActivos, reservasEliminadas, ahoraPanel]);
 
   /*
     Calcula las reservas futuras.
     Se usan para mostrar correctamente la próxima reserva.
   */
   const reservasFuturas = useMemo(() => {
-    const ahora = new Date();
-
     return reservasDelUsuario.filter((reserva) => {
       if (!reserva.fechaHoraDate) return false;
 
-      return reserva.fechaHoraDate >= ahora;
+      return reserva.fechaHoraDate >= ahoraPanel;
     });
-  }, [reservasDelUsuario]);
+  }, [reservasDelUsuario, ahoraPanel]);
 
   /*
     Obtiene la próxima reserva del usuario.
@@ -1600,6 +1423,8 @@ function DashboardUsuario({
     setCanchaSeleccionada(null);
     setFechaSeleccionada(null);
     setHorarioSeleccionado(null);
+    setReservasDelServidor([]);
+    setErrorDisponibilidad('');
   };
 
   /*
@@ -1626,6 +1451,8 @@ function DashboardUsuario({
     setCanchaSeleccionada(cancha);
     setFechaSeleccionada(null);
     setHorarioSeleccionado(null);
+    setReservasDelServidor([]);
+    setErrorDisponibilidad('');
   };
 
   /*
@@ -1637,6 +1464,10 @@ function DashboardUsuario({
     if (pasoActual !== 3) return;
     if (esFechaPasada(fecha)) return;
 
+    // Bloquea los horarios desde el primer render hasta consultar el servidor.
+    setReservasDelServidor([]);
+    setErrorDisponibilidad('');
+    setCargandoReservasDelServidor(true);
     setFechaSeleccionada(fecha);
     setHorarioSeleccionado(null);
   };
@@ -1649,19 +1480,25 @@ function DashboardUsuario({
     de 17:00 a 22:00 debe deshabilitar 17:00, 18:00, 19:00, 20:00 y 21:00.
   */
   const ocupacionBloqueaTurnoSeleccionado = (ocupacion, hora) => {
-    if (!ocupacion || !fechaSeleccionada || !canchaSeleccionada || !hora) {
+    if (!ocupacion || !hora) {
       return false;
     }
 
     const esBloqueo =
       ocupacion.tipo_ocupacion === 'bloqueo' ||
-      ocupacion.id_bloqueo !== null && ocupacion.id_bloqueo !== undefined;
+      (ocupacion.id_bloqueo !== null && ocupacion.id_bloqueo !== undefined);
 
     const idReserva = ocupacion.id_reserva ?? ocupacion.id ?? null;
     const idReservaEnEdicion =
       reservaEnEdicion?.id_reserva ?? reservaEnEdicion?.id ?? null;
 
     /*
+      Este listado YA viene filtrado por el backend usando id_cancha + fecha.
+      No volvemos a comparar fecha/cancha en el navegador porque distintos
+      formatos de serialización podían hacer que un turno realmente ocupado
+      pareciera disponible. Así, si la API devolvió una ocupación, solo resta
+      comprobar el solapamiento horario.
+
       Al modificar una reserva, la reserva original no debe bloquearse a sí
       misma. Esta excepción nunca se aplica a un bloqueo del club.
     */
@@ -1678,31 +1515,11 @@ function DashboardUsuario({
 
     if (
       !esBloqueo &&
-      (
-        estadoOcupacion.includes('cancelada') ||
-        estadoOcupacion.includes('cancelado')
-      )
+      (estadoOcupacion.includes('cancelada') ||
+        estadoOcupacion.includes('cancelado'))
     ) {
       return false;
     }
-
-    const fechaObjetivo = normalizarFechaParaComparar(fechaSeleccionada);
-    const idCanchaSeleccionada =
-      canchaSeleccionada.id ?? canchaSeleccionada.id_cancha ?? null;
-    const nombreCanchaActual =
-      canchaSeleccionada.nombre ?? canchaSeleccionada.nombre_cancha ?? '';
-
-    const mismaFecha =
-      normalizarFechaParaComparar(ocupacion.fecha) === fechaObjetivo;
-
-    const idCanchaOcupacion = obtenerIdCanchaReserva(ocupacion);
-    const mismaCancha =
-      idCanchaSeleccionada !== null && idCanchaOcupacion !== null
-        ? String(idCanchaOcupacion) === String(idCanchaSeleccionada)
-        : normalizarTexto(obtenerNombreCanchaReserva(ocupacion)) ===
-          normalizarTexto(nombreCanchaActual);
-
-    if (!mismaFecha || !mismaCancha) return false;
 
     const inicioTurno = convertirHoraAMinutos(hora);
     const finTurno = inicioTurno === null ? null : inicioTurno + 60;
@@ -1738,12 +1555,31 @@ function DashboardUsuario({
     al backend. Estas ocupaciones pueden ser reservas o bloqueos del club.
   */
   const esHorarioOcupado = (hora) => {
-    const ocupacionesParaValidar = [...reservas, ...reservasDelServidor];
-
-    return ocupacionesParaValidar.some((ocupacion) =>
+    return reservasDelServidor.some((ocupacion) =>
       ocupacionBloqueaTurnoSeleccionado(ocupacion, hora)
     );
   };
+
+  // Si otra persona ocupa un horario ya seleccionado, el wizard vuelve al
+  // paso 4 en cuanto llega la actualización del servidor.
+  useEffect(() => {
+    if (!horarioSeleccionado || cargandoReservasDelServidor) return;
+
+    const ahoraOcupado = reservasDelServidor.some((ocupacion) =>
+      ocupacionBloqueaTurnoSeleccionado(ocupacion, horarioSeleccionado)
+    );
+
+    if (ahoraOcupado) {
+      setHorarioSeleccionado(null);
+    }
+  }, [
+    reservasDelServidor,
+    horarioSeleccionado,
+    cargandoReservasDelServidor,
+    fechaSeleccionada,
+    canchaSeleccionada,
+    reservaEnEdicion,
+  ]);
 
   /*
     Hace una última comprobación contra el backend inmediatamente antes del POST.
@@ -1762,11 +1598,26 @@ function DashboardUsuario({
     Selecciona horario solo cuando corresponde el paso 4.
     No permite seleccionar horarios pasados ni horarios ya reservados.
   */
-  const seleccionarHorario = (hora) => {
+  const seleccionarHorario = async (hora) => {
     if (pasoActual !== 4) return;
-    if (cargandoReservasDelServidor) return;
+    if (cargandoReservasDelServidor || errorDisponibilidad) return;
     if (esHorarioPasado(fechaSeleccionada, hora)) return;
     if (esHorarioOcupado(hora)) return;
+
+    // Revalidación silenciosa justo al tocar un horario aparentemente libre.
+    try {
+      const ocupadoAhora = await verificarHorarioOcupadoEnServidor(hora);
+      if (ocupadoAhora) {
+        setHorarioSeleccionado(null);
+        return;
+      }
+    } catch (error) {
+      console.error('No se pudo revalidar el horario:', error);
+      setErrorDisponibilidad(
+        'No pudimos verificar la disponibilidad. Reintentá en unos segundos.'
+      );
+      return;
+    }
 
     setHorarioSeleccionado(hora);
   };
@@ -1793,7 +1644,7 @@ function DashboardUsuario({
     const puedeAbrirMenu =
       reserva.puedeGestionar ||
       esReservaPasada(reserva) ||
-      puedePagarReserva(reserva);
+      puedeEliminarReserva(reserva);
 
     if (!puedeAbrirMenu) return;
 
@@ -1832,150 +1683,6 @@ function DashboardUsuario({
     // Llevamos al usuario al panel de selección
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
-
-  /*
-    Inicia el pago online de una reserva.
-    Para demo local:
-    - Si el backend no tiene MERCADOPAGO_ACCESS_TOKEN, permite simular aprobado/rechazado/pendiente.
-    - Si el backend devuelve init_point real de Mercado Pago, redirige al checkout.
-  */
-  const prepararPagoConMercadoPago = async (reserva) => {
-    if (!MERCADOPAGO_PUBLIC_KEY) {
-      mostrarError(
-        'Falta configurar Mercado Pago',
-        'Creá un archivo .env en el frontend y agregá VITE_MERCADOPAGO_PUBLIC_KEY con tu Public Key de prueba.'
-      );
-      return;
-    }
-
-    if (!reserva?.id) {
-      mostrarError(
-        'Reserva no disponible',
-        'No se pudo identificar la reserva para iniciar el pago.'
-      );
-      return;
-    }
-
-    if (!puedePagarReserva(reserva)) {
-      mostrarError(
-        'La reserva no se puede pagar',
-        'Esta reserva ya fue pagada o no se encuentra disponible para pago online.'
-      );
-      return;
-    }
-
-    try {
-      setPreparandoMercadoPago(true);
-      setMercadoPagoPreferenceId(null);
-
-      /*
-        Cuando el pago se inicia desde el menú de una reserva existente,
-        abrimos el mismo modal para mostrar allí el botón oficial.
-      */
-      setReservaConfirmada(reserva);
-      setMostrarModalReserva(true);
-      setMenuReservaAbierto(null);
-
-      const token = localStorage.getItem('token');
-
-      const response = await fetch(
-        `${API_URL}/pago/mercadopago/preference/${reserva.id}`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        const mensajeError =
-          data?.message || 'No se pudo preparar el pago.';
-
-        if (normalizarTexto(mensajeError).includes('pagada')) {
-          actualizarEstadoPagoLocal(reserva.id, {
-            estado_pago: 'pagado',
-            mercado_pago_status: 'approved',
-          });
-
-          setMostrarModalReserva(false);
-          setReservaConfirmada(null);
-
-          if (onRefreshReservas) {
-            await onRefreshReservas();
-          }
-        }
-
-        throw new Error(mensajeError);
-      }
-
-      const preferenceId =
-        data.preferenceId ||
-        data.preference_id ||
-        data.id ||
-        data.preference?.id;
-
-      if (!preferenceId) {
-        throw new Error(
-          'El backend creó la operación, pero no devolvió el ID de la preferencia.'
-        );
-      }
-
-      setMercadoPagoPreferenceId(String(preferenceId));
-    } catch (error) {
-      console.error(
-        'Error al preparar pago con Mercado Pago:',
-        error
-      );
-
-      mostrarError(
-        'No se pudo iniciar el pago',
-        error.message ||
-          'Hubo un problema al conectar con Mercado Pago.'
-      );
-    } finally {
-      setPreparandoMercadoPago(false);
-    }
-  };
-
-  /*
-    Cuando el modal de una reserva pendiente se abre, crea automáticamente
-    la preferencia. Así el usuario ve directamente el botón oficial de
-    Mercado Pago, sin un botón intermedio personalizado.
-  */
-  useEffect(() => {
-    if (!mostrarModalReserva) {
-      preferenciaSolicitadaParaReservaRef.current = null;
-      return;
-    }
-
-    if (
-      !reservaConfirmada?.id ||
-      mercadoPagoPreferenceId ||
-      preparandoMercadoPago ||
-      !puedePagarReserva(reservaConfirmada)
-    ) {
-      return;
-    }
-
-    const idReserva = String(reservaConfirmada.id);
-
-    if (preferenciaSolicitadaParaReservaRef.current === idReserva) {
-      return;
-    }
-
-    preferenciaSolicitadaParaReservaRef.current = idReserva;
-    prepararPagoConMercadoPago(reservaConfirmada);
-  }, [
-    mostrarModalReserva,
-    reservaConfirmada?.id,
-    mercadoPagoPreferenceId,
-    preparandoMercadoPago,
-  ]);
-
 
   /*
     Elimina o cancela una reserva existente.
@@ -2055,6 +1762,17 @@ function DashboardUsuario({
         }
       }
 
+      // Libera inmediatamente el horario también en el estado local de
+      // disponibilidad. El backend ya marca la reserva como cancelada, y con
+      // esto el usuario no necesita cambiar de fecha/cancha para verla libre.
+      setReservasDelServidor((prev) =>
+        prev.filter(
+          (item) =>
+            Number(item?.id_reserva ?? item?.id) !==
+            Number(reserva.id_reserva ?? reserva.id)
+        )
+      );
+
       setReservasEliminadas((prev) => [...prev, reserva.id]);
       onDeleteReserva?.(reserva.id);
       if (onRefreshReservas) {
@@ -2106,12 +1824,35 @@ function DashboardUsuario({
       return;
     }
 
+    const confirmacionTurno = await Swal.fire({
+      icon: 'info',
+      title: 'Confirmar turno',
+      text: 'El turno deberá abonarse en su totalidad en el club antes de disputar el partido.',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, confirmar reserva',
+      cancelButtonText: 'Volver',
+      confirmButtonColor: '#087bff',
+      cancelButtonColor: '#64748b',
+      reverseButtons: true,
+      customClass: {
+        popup: 'cy-alert-popup',
+        title: 'cy-alert-title',
+        htmlContainer: 'cy-alert-text',
+        confirmButton: 'cy-alert-button',
+        cancelButton: 'cy-alert-cancel',
+      },
+    });
+
+    if (!confirmacionTurno.isConfirmed) return;
+
     // Snapshot del estado de edición ANTES de cualquier await.
     const reservaEnEdicionSnapshot = reservaEnEdicion;
     const estaModificando = Boolean(reservaEnEdicionSnapshot?.id);
 
-    const estadoPagoAnterior = reservaEnEdicionSnapshot?.estado_pago || 'pendiente';
-    const debeConservarPagoAnterior = ['pagado', 'pago_en_club'].includes(estadoPagoAnterior);
+    const estadoPagoAnterior = normalizarEstadoPago(
+      reservaEnEdicionSnapshot?.estado_pago
+    );
+    const debeConservarPagoAnterior = estadoPagoAnterior === 'pagado';
 
     const [dia, mes, anio] = fechaSeleccionada.split('/');
     const fechaSQL = `${anio}-${mes}-${dia}`;
@@ -2170,7 +1911,7 @@ function DashboardUsuario({
           mostrarError(
             'Horario no disponible',
             detalleError?.message ||
-              'Ese horario no está disponible porque ya fue reservado o bloqueado por el club.'
+            'Ese horario no está disponible porque ya fue reservado o bloqueado por el club.'
           );
           return;
         }
@@ -2178,9 +1919,9 @@ function DashboardUsuario({
         mostrarError(
           estaModificando ? 'No se pudo modificar' : 'No se pudo reservar',
           detalleError?.message ||
-            (estaModificando
-              ? 'Hubo un problema al modificar la reserva. La reserva original se conservó sin cambios.'
-              : 'Hubo un problema al procesar la reserva en el servidor.')
+          (estaModificando
+            ? 'Hubo un problema al modificar la reserva. La reserva original se conservó sin cambios.'
+            : 'Hubo un problema al procesar la reserva en el servidor.')
         );
         return;
       }
@@ -2189,11 +1930,11 @@ function DashboardUsuario({
       setReservasDelServidor((prev) =>
         estaModificando
           ? prev.map((item) =>
-              Number(item?.id_reserva || item?.id) ===
+            Number(item?.id_reserva || item?.id) ===
               Number(reservaEnEdicionSnapshot.id)
-                ? guardada
-                : item
-            )
+              ? guardada
+              : item
+          )
           : [...prev, guardada]
       );
 
@@ -2215,7 +1956,7 @@ function DashboardUsuario({
         estado: 'Confirmada',
         estado_pago: debeConservarPagoAnterior
           ? estadoPagoAnterior
-          : guardada?.estado_pago || 'pendiente',
+          : normalizarEstadoPago(guardada?.estado_pago || 'pago_en_club'),
         monto_total: guardada?.monto_total || canchaSeleccionada.precio || canchaSeleccionada.precio_por_hora || 0,
         puedeGestionar: puedeGestionarPorAnticipacion(
           crearFechaHoraDesdeReserva(fechaSeleccionada, horarioSeleccionado)
@@ -2231,10 +1972,6 @@ function DashboardUsuario({
         onAddReserva(nuevaReserva);
       }
 
-      actualizarEstadoPagoLocal(nuevaReserva.id, {
-        estado_pago: nuevaReserva.estado_pago,
-      });
-
       // ÚNICO MAIL PARA RESERVA CONFIRMADA O MODIFICADA.
       if (usuario?.email) {
         try {
@@ -2243,8 +1980,8 @@ function DashboardUsuario({
             : 'Reserva confirmada';
 
           const message = estaModificando
-            ? `Tu reserva fue modificada correctamente para ${canchaSeleccionada?.nombre || ''} en ${clubSeleccionado || ''} el ${fechaSeleccionada} a las ${horarioSeleccionado} hs.`
-            : `Tu reserva fue confirmada correctamente para ${canchaSeleccionada?.nombre || ''} en ${clubSeleccionado || ''} el ${fechaSeleccionada} a las ${horarioSeleccionado} hs.`;
+            ? `Tu reserva fue modificada correctamente para ${canchaSeleccionada?.nombre || ''} en ${clubSeleccionado || ''} el ${fechaSeleccionada} a las ${horarioSeleccionado} hs. Recordá que el turno debe abonarse en su totalidad en el club antes de disputar el partido.`
+            : `Tu reserva fue confirmada correctamente para ${canchaSeleccionada?.nombre || ''} en ${clubSeleccionado || ''} el ${fechaSeleccionada} a las ${horarioSeleccionado} hs. Recordá que el turno debe abonarse en su totalidad en el club antes de disputar el partido.`;
 
           const responseMail = await fetch(apiUrl('/contact/reserva'), {
             method: 'POST',
@@ -2279,7 +2016,7 @@ function DashboardUsuario({
       }
 
       if (onRefreshReservas) {
-        onRefreshReservas();
+        await onRefreshReservas();
       }
 
       setReservaConfirmada(nuevaReserva);
@@ -2303,9 +2040,6 @@ function DashboardUsuario({
   const cerrarModalReserva = () => {
     setMostrarModalReserva(false);
     setReservaConfirmada(null);
-    setMercadoPagoPreferenceId(null);
-    setPreparandoMercadoPago(false);
-    preferenciaSolicitadaParaReservaRef.current = null;
     reiniciarReserva();
   };
 
@@ -2394,8 +2128,13 @@ function DashboardUsuario({
               </div>
 
               <nav className="dashboard-header__social">
-                {emailHref && (
-                  <a href={emailHref} aria-label="Email">
+                {gmailComposeUrl && (
+                  <a
+                    href={gmailComposeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Email"
+                  >
                     <i className="bi bi-envelope-fill" aria-hidden="true"></i>
                   </a>
                 )}
@@ -2684,10 +2423,10 @@ function DashboardUsuario({
                                           <i className="bi bi-calendar-event"></i>
                                           {formatearFechaTorneo(torneo.fecha_inicio)}
                                           {torneo.fecha_fin &&
-                                          torneo.fecha_fin !== torneo.fecha_inicio
+                                            torneo.fecha_fin !== torneo.fecha_inicio
                                             ? ` al ${formatearFechaTorneo(
-                                                torneo.fecha_fin
-                                              )}`
+                                              torneo.fecha_fin
+                                            )}`
                                             : ''}
                                         </p>
 
@@ -2796,9 +2535,9 @@ function DashboardUsuario({
                                       <span className="club-card__price">
                                         {cancha.precio || cancha.precio_por_hora
                                           ? `$${Number(
-                                              cancha.precio ||
-                                                cancha.precio_por_hora
-                                            ).toLocaleString('es-AR')}/hora`
+                                            cancha.precio ||
+                                            cancha.precio_por_hora
+                                          ).toLocaleString('es-AR')}/hora`
                                           : 'Precio a confirmar'}
                                       </span>
 
@@ -2939,13 +2678,46 @@ function DashboardUsuario({
                           </p>
                         </div>
 
+                        {errorDisponibilidad && (
+                          <div className="availability-inline-error" role="status">
+                            <i className="bi bi-exclamation-circle"></i>
+                            <span>{errorDisponibilidad}</span>
+                          </div>
+                        )}
+
                         <div className="time-grid time-grid--large">
                           {horariosDeCancha.length > 0 ? (
                             horariosDeCancha.map((hora) => {
+                              const horarioPasado = esHorarioPasado(
+                                fechaSeleccionada,
+                                hora
+                              );
+                              const horarioOcupado = esHorarioOcupado(hora);
                               const horarioBloqueado =
                                 cargandoReservasDelServidor ||
-                                esHorarioPasado(fechaSeleccionada, hora) ||
-                                esHorarioOcupado(hora);
+                                Boolean(errorDisponibilidad) ||
+                                horarioPasado ||
+                                horarioOcupado;
+
+                              const textoDisponibilidad = cargandoReservasDelServidor
+                                ? 'Verificando'
+                                : errorDisponibilidad
+                                  ? 'Sin verificar'
+                                  : horarioOcupado
+                                    ? 'No disponible'
+                                    : horarioPasado
+                                      ? 'No disponible'
+                                      : '';
+
+                              const claseEstadoHorario = horarioOcupado
+                                ? ' time-card--occupied'
+                                : horarioPasado
+                                  ? ' time-card--past'
+                                  : errorDisponibilidad
+                                    ? ' time-card--verification-error'
+                                    : cargandoReservasDelServidor
+                                      ? ' time-card--checking'
+                                      : '';
 
                               return (
                                 <button
@@ -2955,13 +2727,21 @@ function DashboardUsuario({
                                   className={
                                     horarioSeleccionado === hora
                                       ? 'time-card time-card--large selected'
-                                      : horarioBloqueado
-                                        ? 'time-card time-card--large disabled'
-                                        : 'time-card time-card--large'
+                                      : `time-card time-card--large${claseEstadoHorario}`
                                   }
                                   onClick={() => seleccionarHorario(hora)}
+                                  aria-label={
+                                    textoDisponibilidad
+                                      ? `${hora} - ${textoDisponibilidad}`
+                                      : `${hora} - disponible`
+                                  }
                                 >
-                                  {hora}
+                                  <span className="time-card__hour">{hora}</span>
+                                  {textoDisponibilidad && (
+                                    <small className="time-card__status">
+                                      {textoDisponibilidad}
+                                    </small>
+                                  )}
                                 </button>
                               );
                             })
@@ -3064,7 +2844,6 @@ function DashboardUsuario({
                 <BancoSuplentesCard onOpen={onOpenBancoSuplentes} />
                 <div className="reservations-panel__header">
                   <h2>Mis Reservas</h2>
-                  <button type="button">Ver historial</button>
                 </div>
 
                 {proximaReserva ? (
@@ -3116,7 +2895,7 @@ function DashboardUsuario({
                 )}
 
                 <h3 className="reservations-panel__subtitle">
-                  Todas mis reservas
+                  Reservas activas
                 </h3>
 
                 <div className="reservations-list">
@@ -3125,118 +2904,98 @@ function DashboardUsuario({
                       const reservaPasada = esReservaPasada(reserva);
 
                       return (
-                      <article key={reserva.id} className="reservation-card">
-                        <div className="reservation-card__date">
-                          <small>{reserva.diaSemana}</small>
-                          <strong>{reserva.dia}</strong>
-                          <small>{reserva.mes}</small>
-                        </div>
-
-                        <div className="reservation-card__info">
-                          <strong>{reserva.hora} hs</strong>
-                          <p>
-                            {reserva.deporte} · {reserva.club}
-                          </p>
-                          <small>{reserva.cancha}</small>
-                        </div>
-
-                        <div className="reservation-card__actions">
-                          <span className={obtenerClaseEstadoReserva(reserva.estado)}>
-                            {reserva.estado}
-                          </span>
-
-                          <span className={obtenerClaseEstadoPago(reserva.estado_pago)}>
-                            {obtenerTextoEstadoPago(reserva.estado_pago)}
-                          </span>
-
-                          {reservaPasada ? (
-                            <small>Turno finalizado</small>
-                          ) : reserva.puedeGestionar ? (
-                            <small>
-                              Podés cancelar o modificar hasta {reserva.limite}
-                            </small>
-                          ) : (
-                            <small>Menos de 24hs de anticipación</small>
-                          )}
-
-                          <div className="reservation-card__menu">
-                            <button
-                              type="button"
-                              className="reservation-card__menu-button"
-                              onClick={() => alternarMenuReserva(reserva)}
-                              disabled={
-                                !reserva.puedeGestionar &&
-                                !puedePagarReserva(reserva) &&
-                                !puedeEliminarReserva(reserva)
-                              }
-                              title={
-                                reservaPasada
-                                  ? 'Borrar del panel'
-                                  : reservaEstaPagada(reserva) && reserva.puedeGestionar
-                                    ? 'Modificar reserva'
-                                    : puedePagarReserva(reserva)
-                                      ? 'Pagar o gestionar reserva'
-                                      : reserva.puedeGestionar
-                                        ? 'Gestionar reserva'
-                                        : 'No se puede gestionar con menos de 24 horas'
-                              }
-                            >
-                              ⋮
-                            </button>
-
-                            {menuReservaAbierto === reserva.id &&
-                              (reserva.puedeGestionar || puedePagarReserva(reserva) || puedeEliminarReserva(reserva)) && (
-                              <div className="reservation-card__dropdown">
-                                {puedePagarReserva(reserva) && (
-                                  <button
-                                    type="button"
-                                    onClick={() => prepararPagoConMercadoPago(reserva)}
-                                  >
-                                    <i className="bi bi-credit-card"></i>
-                                    Pagar reserva
-                                  </button>
-                                )}
-
-                                {!reservaPasada && reserva.puedeGestionar && (
-                                  <button
-                                    type="button"
-                                    onClick={() => iniciarModificacionReserva(reserva)}
-                                  >
-                                    <i className="bi bi-pencil-square"></i>
-                                    Modificar
-                                  </button>
-                                )}
-
-                                {puedeEliminarReserva(reserva) && (
-                                  <button
-                                    type="button"
-                                    className="reservation-card__dropdown-danger"
-                                    onClick={() => eliminarReserva(reserva)}
-                                  >
-                                    <i className="bi bi-trash3"></i>
-                                    {reservaPasada ? 'Borrar del panel' : 'Eliminar'}
-                                  </button>
-                                )}
-                              </div>
-                            )}
+                        <article key={reserva.id} className="reservation-card">
+                          <div className="reservation-card__date">
+                            <small>{reserva.diaSemana}</small>
+                            <strong>{reserva.dia}</strong>
+                            <small>{reserva.mes}</small>
                           </div>
-                        </div>
-                      </article>
+
+                          <div className="reservation-card__info">
+                            <strong>{reserva.hora} hs</strong>
+                            <p>
+                              {reserva.deporte} · {reserva.club}
+                            </p>
+                            <small>{reserva.cancha}</small>
+                          </div>
+
+                          <div className="reservation-card__actions">
+                            {normalizarTexto(reserva.estado) !== 'pendiente' && (
+                              <span className={obtenerClaseEstadoReserva(reserva.estado)}>
+                                {reserva.estado}
+                              </span>
+                            )}
+
+                            {reservaPasada ? (
+                              <small>Turno finalizado</small>
+                            ) : reserva.puedeGestionar ? (
+                              <small>
+                                Podés cancelar o modificar hasta {reserva.limite}
+                              </small>
+                            ) : (
+                              <small>Menos de 24hs de anticipación</small>
+                            )}
+
+                            <div className="reservation-card__menu">
+                              <button
+                                type="button"
+                                className="reservation-card__menu-button"
+                                onClick={() => alternarMenuReserva(reserva)}
+                                disabled={
+                                  !reserva.puedeGestionar &&
+                                  !puedeEliminarReserva(reserva)
+                                }
+                                title={
+                                  reservaPasada
+                                    ? 'Borrar del panel'
+                                    : reserva.puedeGestionar
+                                      ? 'Gestionar reserva'
+                                      : 'No se puede gestionar con menos de 24 horas'
+                                }
+                              >
+                                ⋮
+                              </button>
+
+                              {menuReservaAbierto === reserva.id &&
+                                (reserva.puedeGestionar || puedeEliminarReserva(reserva)) && (
+                                  <div className="reservation-card__dropdown">
+                                    {!reservaPasada && reserva.puedeGestionar && (
+                                      <button
+                                        type="button"
+                                        onClick={() => iniciarModificacionReserva(reserva)}
+                                      >
+                                        <i className="bi bi-pencil-square"></i>
+                                        Modificar
+                                      </button>
+                                    )}
+
+                                    {puedeEliminarReserva(reserva) && (
+                                      <button
+                                        type="button"
+                                        className="reservation-card__dropdown-danger"
+                                        onClick={() => eliminarReserva(reserva)}
+                                      >
+                                        <i className="bi bi-trash3"></i>
+                                        {reservaPasada ? 'Borrar del panel' : 'Eliminar'}
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                            </div>
+                          </div>
+                        </article>
                       );
                     })
                   ) : (
                     <div className="reservations-empty">
-                      <strong>No tenés reservas todavía</strong>
+                      <strong>No tenés reservas activas</strong>
                       <small>
-                        Cuando confirmes una reserva, va a aparecer acá.
+                        Cuando confirmes un nuevo turno, va a aparecer acá.
                       </small>
                     </div>
                   )}
                 </div>
 
-                <button type="button" className="see-all-button">
-                  Ver todas mis reservas
-                </button>
               </aside>
             </section>
 
@@ -3333,11 +3092,11 @@ function DashboardUsuario({
                         torneoSeleccionado.fecha_inicio
                       )}
                       {torneoSeleccionado.fecha_fin &&
-                      torneoSeleccionado.fecha_fin !==
+                        torneoSeleccionado.fecha_fin !==
                         torneoSeleccionado.fecha_inicio
                         ? ` al ${formatearFechaTorneo(
-                            torneoSeleccionado.fecha_fin
-                          )}`
+                          torneoSeleccionado.fecha_fin
+                        )}`
                         : ''}
                     </strong>
                   </span>
@@ -3460,50 +3219,6 @@ function DashboardUsuario({
                 Ver mis reservas
               </button>
             </div>
-
-            {puedePagarReserva(reservaConfirmada) && (
-              <div
-                className="reserva-modal__wallet"
-                style={{ width: '100%', marginTop: '12px', minHeight: '48px' }}
-              >
-                {!mercadoPagoPreferenceId && (
-                  <div
-                    role="status"
-                    aria-live="polite"
-                    style={{
-                      width: '100%',
-                      minHeight: '48px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '8px',
-                      color: '#334155',
-                      fontWeight: 700,
-                    }}
-                  >
-                    <span
-                      className="spinner-border spinner-border-sm"
-                      aria-hidden="true"
-                    ></span>
-                    Preparando Mercado Pago...
-                  </div>
-                )}
-
-                {mercadoPagoPreferenceId && (
-                  <Wallet
-                    initialization={{
-                      preferenceId: mercadoPagoPreferenceId,
-                      redirectMode: 'self',
-                    }}
-                    customization={{
-                      texts: {
-                        valueProp: 'smart_option',
-                      },
-                    }}
-                  />
-                )}
-              </div>
-            )}
           </div>
         </div>
       )}

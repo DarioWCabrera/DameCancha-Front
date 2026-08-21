@@ -1,5 +1,5 @@
 import { API_URL, apiUrl, mediaUrl } from './config/api';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 
 
@@ -52,8 +52,10 @@ const restaurarUsuarioDesdeStorage = () => {
 };
 
 const normalizarEstadoPagoDesdeApi = (estadoPago) => {
-  const estado = (estadoPago || 'pendiente').toString().toLowerCase();
+  const estado = (estadoPago || 'pago_en_club').toString().toLowerCase();
 
+  // Se conservan como pagadas únicamente las reservas históricas que ya
+  // habían sido confirmadas por la integración anterior.
   if (
     estado === 'pagado' ||
     estado === 'approved' ||
@@ -64,25 +66,50 @@ const normalizarEstadoPagoDesdeApi = (estadoPago) => {
     return 'pagado';
   }
 
-  if (
-    estado === 'pago_en_club' ||
-    estado === 'pago en club' ||
-    estado === 'paid_on_site'
-  ) {
-    return 'pago_en_club';
-  }
-
-  if (
-    estado === 'rechazado' ||
-    estado === 'rejected' ||
-    estado === 'rejected_demo' ||
-    estado === 'failure'
-  ) {
-    return 'rechazado';
-  }
-
-  return 'pendiente';
+  // Desde esta versión no existe pago online: toda reserva pendiente,
+  // rechazada o nueva se abona presencialmente en el club.
+  return 'pago_en_club';
 };
+
+const normalizarFechaCalendarioDesdeApi = (valor) => {
+  if (!valor) return '';
+
+  const texto = String(valor).trim();
+  const matchIso = texto.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (matchIso) return matchIso[1];
+
+  const matchVisual = texto.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (matchVisual) return `${matchVisual[3]}-${matchVisual[2]}-${matchVisual[1]}`;
+
+  return texto;
+};
+
+const timestampReserva = (reserva) => {
+  const fecha = String(reserva?.fecha || '').slice(0, 10);
+  const hora = String(reserva?.hora || reserva?.hora_inicio || '00:00').slice(0, 5);
+
+  let anio;
+  let mes;
+  let dia;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    [anio, mes, dia] = fecha.split('-').map(Number);
+  } else if (/^\d{2}\/\d{2}\/\d{4}$/.test(fecha)) {
+    [dia, mes, anio] = fecha.split('/').map(Number);
+  } else {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  const [h = 0, m = 0] = hora.split(':').map(Number);
+  return new Date(anio, mes - 1, dia, h, m, 0, 0).getTime();
+};
+
+const ordenarReservasAsc = (lista = []) =>
+  [...lista].sort((a, b) => {
+    const diferencia = timestampReserva(a) - timestampReserva(b);
+    if (diferencia !== 0) return diferencia;
+    return Number(a?.id_reserva || a?.id || 0) - Number(b?.id_reserva || b?.id || 0);
+  });
 
 const mapReservaDesdeApi = (r) => {
   const estadoPago = normalizarEstadoPagoDesdeApi(
@@ -96,8 +123,9 @@ const mapReservaDesdeApi = (r) => {
     deporte: r.cancha?.deporte?.nombre_deporte || 'Deporte',
     club: r.cancha?.club?.nombre_club || 'Club',
     cancha: r.cancha?.nombre_cancha || 'Cancha',
-    fecha: r.fecha,
+    fecha: normalizarFechaCalendarioDesdeApi(r.fecha),
     hora: r.hora_inicio?.slice(0, 5) || '',
+    hora_fin: r.hora_fin?.slice(0, 5) || '',
     estado: r.estado
       ? r.estado.charAt(0).toUpperCase() + r.estado.slice(1)
       : 'Confirmada',
@@ -109,6 +137,14 @@ const mapReservaDesdeApi = (r) => {
     mercado_pago_status: r.mercado_pago_status || null,
     monto_pagado: r.monto_pagado || null,
     fecha_pago: r.fecha_pago || null,
+
+    // Datos del cliente visibles únicamente para el dueño del club mediante
+    // el endpoint protegido /reserva/club/:idClub.
+    id_usuario: r.usuario?.id_usuario ?? null,
+    cliente_nombre: [r.usuario?.nombre_usuario, r.usuario?.apellido_usuario]
+      .filter(Boolean)
+      .join(' ') || 'Usuario',
+    cliente_telefono: r.usuario?.telefono_usuario || '',
 
     direccion: r.cancha?.club?.direccion_club || '',
     ciudad: r.cancha?.club?.ciudad_club || '',
@@ -151,6 +187,7 @@ function App() {
   const [usuarios, setUsuarios] = useState([]);
   const [clubesRegistrados, setClubesRegistrados] = useState([]);
   const [reservas, setReservas] = useState([]);
+  const reservasRequestSeq = useRef(0);
 
   /*
     Se ejecuta cuando el login fue correcto.
@@ -162,7 +199,7 @@ function App() {
      localStorage.setItem('user', JSON.stringify(user)); // guarda el usuario en localStorage para persistencia
     if (user) {
       if (user.tipo === 'usuario') {
-        fetchReservas(user.id_usuario);
+        fetchReservas();
 
         const redirectAfterLogin =
           localStorage.getItem('redirectAfterLogin');
@@ -186,7 +223,8 @@ function App() {
   const fetchReservasPorClub = async (idClub) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(apiUrl(`/reserva/club/${idClub}`), {
+      const response = await fetch(apiUrl(`/reserva/club/${idClub}?_=${Date.now()}`), {
+        cache: 'no-store',
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -200,18 +238,33 @@ function App() {
     }
   };
 
-  const fetchReservas = async (idUsuario) => {
+  const fetchReservas = async () => {
+    const requestSeq = ++reservasRequestSeq.current;
+
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(apiUrl(`/reserva/usuario/${idUsuario}`), {
+      if (!token) return [];
+
+      // Las reservas del usuario se resuelven desde el JWT en el backend.
+      // Evita inconsistencias entre un id guardado en el frontend y el usuario
+      // realmente autenticado.
+      const response = await fetch(apiUrl(`/reserva/mias?_=${Date.now()}`), {
+        cache: 'no-store',
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
+
       if (response.ok) {
         const data = await response.json();
-        const reservasMapeadas = data.map(mapReservaDesdeApi);
-        setReservas(reservasMapeadas);
+        const reservasMapeadas = ordenarReservasAsc(data.map(mapReservaDesdeApi));
+
+        // Si había una consulta anterior más lenta, no permitimos que pise
+        // una respuesta más reciente (por ejemplo, justo después de reservar).
+        if (requestSeq === reservasRequestSeq.current) {
+          setReservas(reservasMapeadas);
+        }
+
         return reservasMapeadas;
       }
     } catch (error) {
@@ -228,20 +281,39 @@ function App() {
   */
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (!currentUser || !token) return;
+    if (!currentUser || !token) return undefined;
 
-    if (currentUser.tipo === 'usuario' && currentUser.id_usuario) {
-      fetchReservas(currentUser.id_usuario);
-      return;
-    }
+    const refrescarDatosSesion = () => {
+      if (currentUser.tipo === 'usuario') {
+        fetchReservas();
+        return;
+      }
 
-    if (
-      (currentUser.tipo === 'club' || currentUser.tipo === 'dueno') &&
-      currentUser.club?.id_club
-    ) {
-      fetchReservasPorClub(currentUser.club.id_club);
-    }
-  }, []);
+      if (
+        (currentUser.tipo === 'club' || currentUser.tipo === 'dueno') &&
+        currentUser.club?.id_club
+      ) {
+        fetchReservasPorClub(currentUser.club.id_club);
+      }
+    };
+
+    refrescarDatosSesion();
+
+    // Al volver a la pestaña o ventana, refrescamos para que una reserva recién
+    // creada/modificada en otra vista no quede fuera del panel lateral.
+    const alVolverAlFoco = () => refrescarDatosSesion();
+    const alCambiarVisibilidad = () => {
+      if (document.visibilityState === 'visible') refrescarDatosSesion();
+    };
+
+    window.addEventListener('focus', alVolverAlFoco);
+    document.addEventListener('visibilitychange', alCambiarVisibilidad);
+
+    return () => {
+      window.removeEventListener('focus', alVolverAlFoco);
+      document.removeEventListener('visibilitychange', alCambiarVisibilidad);
+    };
+  }, [currentUser?.id_usuario, currentUser?.tipo, currentUser?.club?.id_club]);
 
   /*
     Cierra sesión.
@@ -265,7 +337,7 @@ function App() {
   */
   const handleRegisterComplete = (nuevoUsuario) => {
     if (nuevoUsuario && nuevoUsuario.tipo === 'club') {
-      setClubesRegistrados((prev) => [...prev, { ...nuevoUsuario, estado: 'pendiente', activo: false }]);
+      setClubesRegistrados((prev) => [...prev, { ...nuevoUsuario, estado: 'activo', activo: true }]);
     } else {
       setUsuarios((prev) => [...prev, nuevoUsuario]);
     }
@@ -309,12 +381,14 @@ function App() {
       const idNuevaReserva = String(nuevaReserva.id);
       const existe = prev.some((r) => String(r.id_reserva || r.id) === idNuevaReserva);
 
-      if (!existe) return [...prev, nuevaReserva];
+      if (!existe) return ordenarReservasAsc([...prev, nuevaReserva]);
 
-      return prev.map((r) =>
-        String(r.id_reserva || r.id) === idNuevaReserva
-          ? { ...r, ...nuevaReserva }
-          : r
+      return ordenarReservasAsc(
+        prev.map((r) =>
+          String(r.id_reserva || r.id) === idNuevaReserva
+            ? { ...r, ...nuevaReserva }
+            : r
+        )
       );
     });
   };
@@ -327,16 +401,18 @@ function App() {
     const idObjetivo = String(reservaId);
 
     setReservas((prev) =>
-      prev.map((reserva) =>
-        String(reserva.id_reserva || reserva.id) === idObjetivo
-          ? {
-              ...reserva,
-              ...reservaActualizada,
-              id: reserva.id || reservaActualizada.id || reservaId,
-              timestamp: new Date().toISOString(),
-              estado: reservaActualizada.estado || reserva.estado || 'Confirmada',
-            }
-          : reserva
+      ordenarReservasAsc(
+        prev.map((reserva) =>
+          String(reserva.id_reserva || reserva.id) === idObjetivo
+            ? {
+                ...reserva,
+                ...reservaActualizada,
+                id: reserva.id || reservaActualizada.id || reservaId,
+                timestamp: new Date().toISOString(),
+                estado: reservaActualizada.estado || reserva.estado || 'Confirmada',
+              }
+            : reserva
+        )
       )
     );
   };
@@ -439,7 +515,7 @@ function App() {
               onAddReserva={handleAddReserva}
               onUpdateReserva={handleUpdateReserva}
               onDeleteReserva={handleDeleteReserva}
-              onRefreshReservas={() => fetchReservas(currentUser.id_usuario)}
+              onRefreshReservas={() => fetchReservas()}
               onOpenBancoSuplentes={() =>
                 navigate('/banco-de-suplentes')
               }

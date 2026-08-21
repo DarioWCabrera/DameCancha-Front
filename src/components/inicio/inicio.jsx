@@ -120,10 +120,15 @@ const Inicio = ({ onLoginSuccess, onRegister, onRegisterClub, onAdminLogin }) =>
   const [modalActivo, setModalActivo] = useState(null);
 
   useEffect(() => {
-    const BASE_USUARIOS = 350;
+    const CONTADOR_INICIAL = 50;
+
+    // IMPORTANTE:
+    // Acá va la cantidad de usuarios REALES que tenés hoy en Neon.
+    const USUARIOS_REALES_INICIALES = 1;
 
     const animarContador = (total) => {
       let contador = 0;
+
       const incremento = Math.max(1, Math.ceil(total / 70));
 
       const intervalo = setInterval(() => {
@@ -140,7 +145,7 @@ const Inicio = ({ onLoginSuccess, onRegister, onRegisterClub, onAdminLogin }) =>
 
     const obtenerCantidadUsuarios = async () => {
       try {
-        const response = await fetch(apiUrl('/user/count'));
+        const response = await fetch(apiUrl("/user/count"));
 
         if (!response.ok) {
           throw new Error("No se pudo obtener la cantidad de usuarios");
@@ -148,13 +153,22 @@ const Inicio = ({ onLoginSuccess, onRegister, onRegisterClub, onAdminLogin }) =>
 
         const data = await response.json();
 
-        const totalConBase = BASE_USUARIOS + data.total;
+        const usuariosNuevos = Math.max(
+          0,
+          data.total - USUARIOS_REALES_INICIALES
+        );
 
-        animarContador(totalConBase);
+        const totalVisible =
+          CONTADOR_INICIAL + usuariosNuevos * 7;
+
+        animarContador(totalVisible);
       } catch (error) {
-        console.error("Error al obtener usuarios registrados:", error);
+        console.error(
+          "Error al obtener usuarios registrados:",
+          error
+        );
 
-        animarContador(BASE_USUARIOS);
+        animarContador(CONTADOR_INICIAL);
       }
     };
 

@@ -16,7 +16,7 @@
 
   background-image:
     linear-gradient(rgba(120, 145, 155, 0.45), rgba(120, 145, 155, 0.45)),
-    url('src/components/inicio/backgroud1.png');
+    url('../inicio/backgroud1.png');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -206,6 +206,46 @@
   padding-right: 48px;
 }
 
+
+
+/* =========================================================
+   RECORDAR SESIÓN
+========================================================= */
+
+.login-remember-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: -2px 0 18px;
+  color: #1d2b4f;
+  cursor: pointer;
+  user-select: none;
+}
+
+.login-remember-row input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: #0d6efd;
+  flex: 0 0 auto;
+}
+
+.login-remember-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.25;
+}
+
+.login-remember-row strong {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.login-remember-row small {
+  color: #6b7280;
+  font-size: 12px;
+}
 
 /* =========================================================
    BOTÓN PRINCIPAL DE INGRESO

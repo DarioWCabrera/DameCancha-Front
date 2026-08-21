@@ -1,11 +1,11 @@
 import React from 'react';
+import { whatsappHref } from '../../config/contact';
 
 const WhatsAppButton = () => {
-  const phoneNumber = "5492983340902";
   const message = "Hola! Vi tu web DameCancha y me gustaría hacer una consulta.";
   
   // Codificamos el mensaje para que sea válido en la URL
-  const url = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
+  const url = `${whatsappHref}?text=${encodeURIComponent(message)}`;
 
   const buttonStyle = {
     position: 'fixed',

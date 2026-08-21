@@ -26,7 +26,7 @@
 
   background-image:
     linear-gradient(rgba(8, 28, 54, 0.55), rgba(8, 28, 54, 0.55)),
-    url('/src/components/inicio/backgroud1.png');
+    url('../inicio/backgroud1.png');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -524,6 +524,53 @@
   opacity: 0.85;
 }
 
+
+.pdc-reservation-info {
+  min-width: 0;
+}
+
+.pdc-reservation-client {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 7px;
+  font-size: 0.82rem;
+}
+
+.pdc-reservation-client > span,
+.pdc-reservation-client > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pdc-reservation-client > a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.pdc-reservation-client > a:hover {
+  text-decoration: underline;
+}
+
+.pdc-cancellation-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: inherit;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.pdc-cancellation-count.is-warning {
+  background: rgba(255, 176, 32, 0.22);
+  color: #ffd98b;
+  border: 1px solid rgba(255, 190, 67, 0.35);
+}
+
 .pdc-confirmed,
 .pdc-pending {
   padding: 6px 11px;
@@ -540,62 +587,6 @@
 .pdc-pending {
   background: #ffe3b3;
   color: #d27b00;
-}
-
-.pdc-upcoming-reservations-panel {
-  align-self: start;
-}
-
-.pdc-upcoming-reservations-list {
-  width: 100%;
-}
-
-.pdc-upcoming-reservations-list-expanded {
-  max-height: 480px;
-  overflow-y: auto;
-  padding-right: 8px;
-}
-
-.pdc-upcoming-reservations-list-expanded::-webkit-scrollbar {
-  width: 7px;
-}
-
-.pdc-upcoming-reservations-list-expanded::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-}
-
-.pdc-upcoming-reservations-list-expanded::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.38);
-  border-radius: 999px;
-}
-
-.pdc-see-more-reservations-button {
-  width: 100%;
-  margin-top: 12px;
-  padding: 11px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
-  font: inherit;
-  font-size: 0.88rem;
-  font-weight: 900;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition:
-    background 0.18s ease,
-    border-color 0.18s ease,
-    transform 0.18s ease;
-}
-
-.pdc-see-more-reservations-button:hover {
-  background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.48);
-  transform: translateY(-1px);
 }
 
 /* =========================================================
@@ -647,6 +638,31 @@
 .pdc-calendar-preview-item p {
   font-weight: 700;
   color: #45eb67;
+}
+
+
+.pdc-calendar-reservation-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-align: right;
+}
+
+.pdc-calendar-reservation-detail small {
+  font-size: 0.78rem;
+  opacity: 0.88;
+}
+
+.pdc-calendar-reservation-detail a {
+  color: #ffffff;
+  font-size: 0.78rem;
+  text-decoration: none;
+  opacity: 0.9;
+}
+
+.pdc-calendar-reservation-detail a:hover {
+  text-decoration: underline;
 }
 
 /* =========================================================
@@ -945,7 +961,7 @@
 }
 
 /* =========================================================
-   SWEETALERT CANCHASYA
+   SWEETALERT DAMECANCHA
    Estos selectores son globales porque SweetAlert renderiza
    fuera del árbol del componente.
 ========================================================= */
@@ -2744,3 +2760,32 @@
   }
 }
 
+
+
+@media (max-width: 640px) {
+  .pdc-reservation-row {
+    grid-template-columns: 64px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .pdc-reservation-row > .pdc-confirmed,
+  .pdc-reservation-row > .pdc-pending {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .pdc-reservation-client {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .pdc-calendar-preview-item {
+    align-items: flex-start;
+  }
+
+  .pdc-calendar-reservation-detail {
+    align-items: flex-end;
+    max-width: 55%;
+  }
+}
