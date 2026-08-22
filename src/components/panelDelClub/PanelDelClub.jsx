@@ -24,6 +24,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
   const [mostrarModalSuscripcion, setMostrarModalSuscripcion] = useState(false);
+  const [solicitandoBaja, setSolicitandoBaja] = useState(false);
 
   const abrirModalSuscripcion = () => {
     setMostrarModalSuscripcion(true);
@@ -138,6 +139,99 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     club?.id_club ||
     club?.id ||
     null;
+
+  const handleSolicitarBajaServicio = async () => {
+    if (!idClubActual) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'Club no disponible',
+        text: 'No se pudo identificar el club.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+
+      return;
+    }
+
+    const confirmacion = await Swal.fire({
+      icon: 'warning',
+      title: 'Solicitar baja del servicio',
+      text: 'La solicitud será enviada al administrador de DameCancha para su revisión.',
+      input: 'textarea',
+      inputLabel: 'Motivo de la baja (opcional)',
+      inputPlaceholder: 'Podés contarnos brevemente el motivo...',
+      inputAttributes: {
+        maxlength: '1000',
+      },
+      showCancelButton: true,
+      confirmButtonText: 'Enviar solicitud',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc3545',
+      cancelButtonColor: '#64748b',
+      reverseButtons: true,
+    });
+
+    if (!confirmacion.isConfirmed) return;
+
+    setSolicitandoBaja(true);
+
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error(
+          'La sesión no está disponible. Cerrá sesión e ingresá nuevamente.'
+        );
+      }
+
+      const response = await fetch(apiUrl('/solicitud-baja'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          idClub: Number(idClubActual),
+          motivo: confirmacion.value?.trim() || undefined,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message || 'No se pudo registrar la solicitud de baja.'
+        );
+      }
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Solicitud enviada',
+        html: `
+          <p>Recibimos correctamente tu solicitud de baja.</p>
+          <p><strong>Código:</strong> ${data?.solicitud?.codigo || '-'}</p>
+          <p>La solicitud quedó pendiente de revisión.</p>
+        `,
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+    } catch (error) {
+      console.error('Error al solicitar baja del servicio:', error);
+
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo enviar la solicitud',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    } finally {
+      setSolicitandoBaja(false);
+    }
+  };
 
   /*
     Nombre del club.
@@ -2968,6 +3062,62 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                     })}
                   </div>
                 )}
+              </div>
+
+              {/* BAJA DEL SERVICIO */}
+              <div
+                className="pdc-settings-box"
+                style={{
+                  marginTop: '18px',
+                  border: '1px solid rgba(239, 68, 68, 0.55)',
+                  background: 'rgba(127, 29, 29, 0.16)',
+                }}
+              >
+                <div style={{ marginBottom: '14px' }}>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      marginBottom: '6px',
+                      color: '#fca5a5',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      letterSpacing: '0.08em',
+                    }}
+                  >
+                    SUSCRIPCIÓN
+                  </span>
+
+                  <h3 style={{ marginBottom: '6px' }}>
+                    Dar de baja el servicio
+                  </h3>
+
+                  <p className="pdc-settings-description" style={{ marginBottom: 0 }}>
+                    Si ya no querés continuar utilizando DameCancha, podés enviar
+                    una solicitud de baja. La solicitud será revisada por nuestro
+                    equipo antes de ser procesada.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSolicitarBajaServicio}
+                  disabled={solicitandoBaja}
+                  style={{
+                    border: '1px solid #ef4444',
+                    borderRadius: '7px',
+                    background: '#dc3545',
+                    color: '#ffffff',
+                    padding: '10px 14px',
+                    fontWeight: 700,
+                    cursor: solicitandoBaja ? 'not-allowed' : 'pointer',
+                    opacity: solicitandoBaja ? 0.65 : 1,
+                  }}
+                >
+                  <i className="bi bi-box-arrow-down" style={{ marginRight: '7px' }}></i>
+                  {solicitandoBaja
+                    ? 'Enviando solicitud...'
+                    : 'Solicitar baja del servicio'}
+                </button>
               </div>
             </div>
           </section>

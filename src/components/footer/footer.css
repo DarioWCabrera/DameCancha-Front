@@ -62,125 +62,17 @@
   color: #ffffff;
   font-size: 14px;
   text-decoration: none;
-  transition: opacity 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    text-decoration-color 0.2s ease;
 }
 
 .footer-link:hover {
   opacity: 0.8;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
-/* BOTÓN LEGAL */
-
-.footer-button {
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-
-  font: inherit;
-  color: #ffffff;
-  cursor: pointer;
-}
-
-.footer-button:hover {
-  opacity: 0.8;
-}
-
-/* MODAL TÉRMINOS */
-
-.terms-modal-overlay {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100vh;
-
-  background-color: rgba(0, 0, 0, 0.7);
-
-  display: flex;
-  justify-content: center;
-  align-items: center;
-
-  z-index: 99999;
-  padding: 20px;
-}
-
-.terms-modal-content {
-  position: relative;
-
-  width: 100%;
-  max-width: 850px;
-  max-height: 85vh;
-  overflow-y: auto;
-
-  background: #ffffff !important;
-  background-color: #ffffff !important;
-  color: #111111 !important;
-
-  border-radius: 14px;
-  padding: 45px 40px 35px;
-
-  font-family: "Segoe UI", sans-serif;
-  line-height: 1.6;
-
-  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.45);
-
-  opacity: 1 !important;
-  z-index: 100000;
-}
-
-.terms-modal-content h2 {
-  margin: 0 0 24px;
-
-  color: #007bff !important;
-  font-size: 30px;
-  font-weight: 700;
-  text-align: center;
-}
-
-.terms-modal-content h3 {
-  margin-top: 24px;
-  margin-bottom: 8px;
-
-  color: #111111 !important;
-  font-size: 19px;
-  font-weight: 700;
-}
-
-.terms-modal-content p {
-  margin-bottom: 12px;
-
-  color: #111111 !important;
-  font-size: 15px;
-}
-
-.terms-modal-content strong {
-  color: #111111 !important;
-}
-
-.terms-modal-close {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-
-  width: 38px;
-  height: 38px;
-
-  border: none;
-  border-radius: 50%;
-
-  background-color: #007bff;
-  color: #ffffff;
-
-  font-size: 28px;
-  line-height: 1;
-
-  cursor: pointer;
-  z-index: 100001;
-}
-
-.terms-modal-close:hover {
-  background-color: #0056b3;
-}
 
 /* RESPONSIVE */
 
@@ -219,10 +111,6 @@
   .footer-right {
     text-align: center;
   }
-
-  .footer-button {
-    text-align: center;
-  }
 }
 
 @media (max-width: 600px) {
@@ -238,27 +126,5 @@
   .footer-link,
   .footer-section li {
     font-size: 14px;
-  }
-
-  .terms-modal-content {
-    padding: 42px 22px 28px;
-    max-height: 88vh;
-  }
-
-  .terms-modal-content h2 {
-    font-size: 24px;
-  }
-
-  .terms-modal-content h3 {
-    font-size: 17px;
-  }
-
-  .terms-modal-content p {
-    font-size: 14px;
-  }
-
-  .terms-modal-close {
-    top: 10px;
-    right: 10px;
   }
 }

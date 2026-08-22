@@ -772,17 +772,47 @@ function Register({ onRegisterComplete, onCancelRegister }) {
               </div>
 
               {/* Términos y condiciones */}
-              <div className="form-check mb-4">
+              <div className="form-check mb-2">
                 <input
                   className="form-check-input"
                   type="checkbox"
-                  id="terminosClub"
+                  id="terminosUsuario"
                   required
                 />
-                <label className="form-check-label" htmlFor="terminosClub">
-                  Acepto términos y condiciones
+
+                <label
+                  className="form-check-label"
+                  htmlFor="terminosUsuario"
+                >
+                  Acepto los{' '}
+                  <a
+                    href="/legal/terminos.html"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Términos y Condiciones
+                  </a>{' '}
+                  y la{' '}
+                  <a
+                    href="/legal/privacidad.html"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Política de Privacidad
+                  </a>
                 </label>
               </div>
+
+              <p className="register-privacy-note">
+                Tus datos serán utilizados para gestionar tu cuenta y las funciones de DameCancha.{' '}
+                <a
+                  href="/legal/privacidad.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Más información
+                </a>
+              </p>
 
               {/* Botón principal con ícono */}
               <button className="btn btn-primary btn-lg w-100" type="submit">

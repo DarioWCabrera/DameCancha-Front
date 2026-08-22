@@ -1,5 +1,6 @@
 import { apiUrl } from '../../config/api';
 import React, { useState, useEffect } from 'react';
+import Swal from 'sweetalert2';
 import './Admin.css';
 
 const AdminPanel = ({ adminUser, onLogout }) => {
@@ -13,6 +14,11 @@ const AdminPanel = ({ adminUser, onLogout }) => {
   const [errorMessage, setErrorMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [clubesAceptados, setClubesAceptados] = useState([]);
+
+  // Solicitudes de baja del servicio.
+  const [solicitudesBaja, setSolicitudesBaja] = useState([]);
+  const [cargandoSolicitudesBaja, setCargandoSolicitudesBaja] = useState(false);
+  const [procesandoSolicitudBajaId, setProcesandoSolicitudBajaId] = useState(null);
 
   // Los clubes se incorporan automáticamente y se administran desde esta lista.
   // Cargar clubes aceptados desde la base de datos
@@ -60,10 +66,161 @@ const AdminPanel = ({ adminUser, onLogout }) => {
     }
   };
 
+  const fetchSolicitudesBaja = async () => {
+    setCargandoSolicitudesBaja(true);
+
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error(
+          'La sesión no está disponible. Cerrá sesión e ingresá nuevamente.'
+        );
+      }
+
+      const response = await fetch(apiUrl('/solicitud-baja/admin'), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: 'no-store',
+      });
+
+      const data = await response.json().catch(() => []);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message || 'No se pudieron cargar las solicitudes de baja.'
+        );
+      }
+
+      setSolicitudesBaja(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error al cargar solicitudes de baja:', error);
+      setSolicitudesBaja([]);
+    } finally {
+      setCargandoSolicitudesBaja(false);
+    }
+  };
+
+  const obtenerNombreClubSolicitud = (solicitud) => {
+    const clubRelacionado = clubesAceptados.find(
+      (club) => Number(club.id) === Number(solicitud.id_club)
+    );
+
+    return (
+      clubRelacionado?.nombre ||
+      clubRelacionado?.razonSocial ||
+      `Club #${solicitud.id_club}`
+    );
+  };
+
+  const formatearFechaSolicitud = (fecha) => {
+    if (!fecha) return 'Sin fecha';
+
+    const parsed = new Date(fecha);
+
+    if (Number.isNaN(parsed.getTime())) {
+      return String(fecha);
+    }
+
+    return parsed.toLocaleString('es-AR', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    });
+  };
+
+  const procesarSolicitudBaja = async (solicitud) => {
+    if (!solicitud?.id_solicitud || solicitud.estado !== 'pendiente') {
+      return;
+    }
+
+    const confirmacion = await Swal.fire({
+      icon: 'warning',
+      title: 'Procesar solicitud de baja',
+      html: `
+        <p>Vas a marcar como procesada la solicitud:</p>
+        <p><strong>${solicitud.codigo || `#${solicitud.id_solicitud}`}</strong></p>
+        <p>Esto no desactiva automáticamente el club.</p>
+      `,
+      showCancelButton: true,
+      confirmButtonText: 'Sí, marcar procesada',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc3545',
+      cancelButtonColor: '#64748b',
+      reverseButtons: true,
+    });
+
+    if (!confirmacion.isConfirmed) {
+      return;
+    }
+
+    setProcesandoSolicitudBajaId(solicitud.id_solicitud);
+
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error(
+          'La sesión no está disponible. Cerrá sesión e ingresá nuevamente.'
+        );
+      }
+
+      const response = await fetch(
+        apiUrl(`/solicitud-baja/${solicitud.id_solicitud}/procesar`),
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message || 'No se pudo procesar la solicitud de baja.'
+        );
+      }
+
+      setSolicitudesBaja((prev) =>
+        prev.map((item) =>
+          String(item.id_solicitud) === String(solicitud.id_solicitud)
+            ? data.solicitud
+            : item
+        )
+      );
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Solicitud procesada',
+        text: 'La solicitud quedó marcada como procesada correctamente.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+    } catch (error) {
+      console.error('Error al procesar solicitud de baja:', error);
+
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo procesar',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    } finally {
+      setProcesandoSolicitudBajaId(null);
+    }
+  };
+
   // Cargar datos al montar el componente
   useEffect(() => {
     fetchClubesAceptados();
     fetchAdmins();
+    fetchSolicitudesBaja();
   }, []);
 
   const handleAddAdmin = async (e) => {
@@ -282,6 +439,93 @@ const AdminPanel = ({ adminUser, onLogout }) => {
           </div>
         </div>
       )}
+
+      {/* Solicitudes de baja del servicio */}
+      <div className="admin-section">
+        <h2 className="admin-section-title">
+          Solicitudes de baja ({solicitudesBaja.length})
+        </h2>
+
+        {cargandoSolicitudesBaja ? (
+          <p className="admin-no-items">Cargando solicitudes...</p>
+        ) : solicitudesBaja.length === 0 ? (
+          <p className="admin-no-items">No hay solicitudes de baja registradas</p>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Club</th>
+                  <th>Motivo</th>
+                  <th>Estado</th>
+                  <th>Fecha</th>
+                  <th>Procesada</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {solicitudesBaja.map((solicitud) => {
+                  const pendiente = solicitud.estado === 'pendiente';
+                  const procesando =
+                    String(procesandoSolicitudBajaId) ===
+                    String(solicitud.id_solicitud);
+
+                  return (
+                    <tr key={solicitud.id_solicitud}>
+                      <td>
+                        <strong>{solicitud.codigo || '-'}</strong>
+                      </td>
+
+                      <td>{obtenerNombreClubSolicitud(solicitud)}</td>
+
+                      <td>
+                        {solicitud.motivo?.trim()
+                          ? solicitud.motivo
+                          : 'Sin motivo informado'}
+                      </td>
+
+                      <td>
+                        <span
+                          className={`admin-badge-status ${
+                            pendiente ? 'activo' : 'inactivo'
+                          }`}
+                        >
+                          {pendiente ? 'Pendiente' : 'Procesada'}
+                        </span>
+                      </td>
+
+                      <td>{formatearFechaSolicitud(solicitud.created_at)}</td>
+
+                      <td>
+                        {solicitud.processed_at
+                          ? formatearFechaSolicitud(solicitud.processed_at)
+                          : '-'}
+                      </td>
+
+                      <td>
+                        {pendiente ? (
+                          <button
+                            type="button"
+                            className="admin-submit-btn"
+                            onClick={() => procesarSolicitudBaja(solicitud)}
+                            disabled={procesando}
+                          >
+                            {procesando ? 'Procesando...' : 'Procesar'}
+                          </button>
+                        ) : (
+                          <span>Completada</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       {/* Gestión de clubes: altas automáticas, con posibilidad de inactivar/reactivar. */}
       {/* Sección de Clubes Registrados */}
