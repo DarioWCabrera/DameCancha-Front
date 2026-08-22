@@ -1854,8 +1854,7 @@ function DashboardUsuario({
     );
     const debeConservarPagoAnterior = estadoPagoAnterior === 'pagado';
 
-    const [dia, mes, anio] = fechaSeleccionada.split('/');
-    const fechaSQL = `${anio}-${mes}-${dia}`;
+   const fechaSQL = normalizarFechaParaComparar(fechaSeleccionada);
 
     const reservaDTO = {
       id_usuario: usuario.id_usuario,
