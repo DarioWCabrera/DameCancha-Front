@@ -753,3 +753,29 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+.password-input {
+  padding-right: 52px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  color: #6c757d;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 6px;
+  z-index: 5;
+}
+
+.password-toggle:hover {
+  color: #1f4ea6;
+}
+
+.password-toggle:focus {
+  outline: none;
+}

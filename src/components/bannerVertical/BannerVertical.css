@@ -36,9 +36,22 @@
   filter: saturate(1.05);
 }
 
-.banner-vertical--login,
-.banner-vertical--default {
-  width: 220px;
+/* =========================================================
+   AJUSTE BANNERS LOGIN
+   Más compactos y sin recortar la publicidad.
+========================================================= */
+
+.banner-vertical--login {
+  width: 205px;
+  height: calc(100vh - 115px);
+  background: transparent;
+}
+
+.banner-vertical--login .banner-vertical-imagen {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
 }
 
 .banner-vertical--left {

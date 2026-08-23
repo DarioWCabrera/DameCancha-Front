@@ -12,14 +12,15 @@
   "dependencies": {
     "react": "^19.1.1",
     "react-bootstrap": "^2.10.10",
-    "react-dom": "^19.1.1"
+    "react-dom": "^19.1.1",
+    "react-google-recaptcha": "^3.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",
     "@types/react": "^19.1.16",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.2.0",
-    "baseline-browser-mapping": "^2.10.37",
+    "baseline-browser-mapping": "^2.11.17",
     "bootstrap": "^5.3.8",
     "bootstrap-icons": "^1.13.1",
     "eslint": "^9.36.0",

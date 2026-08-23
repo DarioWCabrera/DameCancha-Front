@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import Swal from 'sweetalert2';
+import ReCAPTCHA from 'react-google-recaptcha';
 import './register.css';
 import Logo from './logo.jpg';
 import LogoBlanco from './logo_blanco.webp';
@@ -28,6 +29,10 @@ function RegisterUser({ onRegisterComplete, onCancelRegister }) {
   const [ciudades, setCiudades] = useState([]);
   const [mostrarProvincias, setMostrarProvincias] = useState(false);
   const [mostrarCiudades, setMostrarCiudades] = useState(false);
+  const [recaptchaToken, setRecaptchaToken] = useState(null);
+  const [mostrarPassword, setMostrarPassword] = useState(false);
+  const [mostrarConfirmPassword, setMostrarConfirmPassword] = useState(false);
+
 
   useEffect(() => {
     const loadProvincias = async () => {
@@ -148,6 +153,14 @@ function RegisterUser({ onRegisterComplete, onCancelRegister }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (!recaptchaToken) {
+      return Swal.fire({
+        icon: 'warning',
+        title: 'Verificación requerida',
+        text: 'Por favor, confirmá que no sos un robot.',
+      });
+    }
+
     if (formData.password !== formData.confirmPassword) {
       Swal.fire({
         icon: 'error',
@@ -227,6 +240,7 @@ function RegisterUser({ onRegisterComplete, onCancelRegister }) {
           provincia_usuario: formData.provincia,
           cp_usuario: formData.cp,
           tipo_usuario: 'usuario',
+          recaptchaToken,
         }),
       });
 
@@ -398,37 +412,87 @@ function RegisterUser({ onRegisterComplete, onCancelRegister }) {
                   <i className="bi bi-envelope icon-inside"></i>
                 </div>
               </div>
+
               {/* Contraseñas */}
               <div className="row mb-3">
-                <div className="col-md-6 position-relative">
-                  <label htmlFor="password" className="form-label">Contraseña</label>
-                  <input
-                    type="password"
-                    className="form-control form-control-lg input-with-icon"
-                    id="password"
-                    placeholder="Ingrese su contraseña"
-                    value={formData.password}
-                    onChange={handleChange}
-                    required
-                  />
-                  <i className="bi bi-lock icon-inside"></i>
+                <div className="col-md-6">
+                  <label htmlFor="password" className="form-label">
+                    Contraseña
+                  </label>
+
+                  <div className="position-relative">
+                    <input
+                      type={mostrarPassword ? 'text' : 'password'}
+                      className="form-control form-control-lg password-input"
+                      id="password"
+                      placeholder="Ingrese su contraseña"
+                      value={formData.password}
+                      onChange={handleChange}
+                      required
+                    />
+
+                    
+
+                    <button
+                      type="button"
+                      className="password-toggle"
+                      onClick={() => setMostrarPassword((prev) => !prev)}
+                      aria-label={
+                        mostrarPassword
+                          ? 'Ocultar contraseña'
+                          : 'Mostrar contraseña'
+                      }
+                    >
+                      <i
+                        className={`bi ${mostrarPassword ? 'bi-eye-slash' : 'bi-eye'
+                          }`}
+                      ></i>
+                    </button>
+                  </div>
+
                   <small className="text-light d-block mt-1">
                     Mínimo 8 caracteres, una letra y un número.
                   </small>
                 </div>
 
-                <div className="col-md-6 position-relative">
-                  <label htmlFor="confirmPassword" className="form-label">Repetir Contraseña</label>
-                  <input
-                    type="password"
-                    className="form-control form-control-lg input-with-icon"
-                    id="confirmPassword"
-                    placeholder="Repita su contraseña"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    required
-                  />
-                  <i className="bi bi-lock-fill icon-inside"></i>
+                <div className="col-md-6">
+                  <label htmlFor="confirmPassword" className="form-label">
+                    Repetir Contraseña
+                  </label>
+
+                  <div className="position-relative">
+                    <input
+                      type={mostrarConfirmPassword ? 'text' : 'password'}
+                      className="form-control form-control-lg input-with-icon password-input"
+                      id="confirmPassword"
+                      placeholder="Repita su contraseña"
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
+                      required
+                    />
+
+                   
+
+                    <button
+                      type="button"
+                      className="password-toggle"
+                      onClick={() =>
+                        setMostrarConfirmPassword((prev) => !prev)
+                      }
+                      aria-label={
+                        mostrarConfirmPassword
+                          ? 'Ocultar contraseña'
+                          : 'Mostrar contraseña'
+                      }
+                    >
+                      <i
+                        className={`bi ${mostrarConfirmPassword
+                            ? 'bi-eye-slash'
+                            : 'bi-eye'
+                          }`}
+                      ></i>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -647,6 +711,16 @@ function RegisterUser({ onRegisterComplete, onCancelRegister }) {
                   Más información
                 </a>
               </p>
+
+              {/* reCAPTCHA */}
+              <div className="d-flex justify-content-center mb-3">
+                <ReCAPTCHA
+                  sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
+                  onChange={(token) => setRecaptchaToken(token)}
+                  onExpired={() => setRecaptchaToken(null)}
+                  onErrored={() => setRecaptchaToken(null)}
+                />
+              </div>
 
               {/* Botón principal con ícono */}
               <button className="btn btn-primary btn-lg w-100" type="submit">

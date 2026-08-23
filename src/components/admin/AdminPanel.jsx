@@ -15,6 +15,11 @@ const AdminPanel = ({ adminUser, onLogout }) => {
   const [loading, setLoading] = useState(false);
   const [clubesAceptados, setClubesAceptados] = useState([]);
 
+  // Solicitudes de alta de clubes.
+  const [clubesPendientes, setClubesPendientes] = useState([]);
+  const [cargandoClubesPendientes, setCargandoClubesPendientes] = useState(false);
+  const [procesandoClubPendienteId, setProcesandoClubPendienteId] = useState(null);
+
   // Solicitudes de baja del servicio.
   const [solicitudesBaja, setSolicitudesBaja] = useState([]);
   const [cargandoSolicitudesBaja, setCargandoSolicitudesBaja] = useState(false);
@@ -36,6 +41,42 @@ const AdminPanel = ({ adminUser, onLogout }) => {
       }
     } catch (error) {
       console.error('Error al cargar clubes aceptados:', error);
+    }
+  };
+
+  const fetchClubesPendientes = async () => {
+    setCargandoClubesPendientes(true);
+
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error(
+          'La sesión no está disponible. Cerrá sesión e ingresá nuevamente.'
+        );
+      }
+
+      const response = await fetch(apiUrl('/club/pendientes'), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        cache: 'no-store',
+      });
+
+      const data = await response.json().catch(() => []);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message || 'No se pudieron cargar las solicitudes de alta.'
+        );
+      }
+
+      setClubesPendientes(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error al cargar clubes pendientes:', error);
+      setClubesPendientes([]);
+    } finally {
+      setCargandoClubesPendientes(false);
     }
   };
 
@@ -216,8 +257,101 @@ const AdminPanel = ({ adminUser, onLogout }) => {
     }
   };
 
+  const procesarSolicitudAlta = async (club, accion) => {
+    if (!club?.id || !['aceptar', 'rechazar'].includes(accion)) {
+      return;
+    }
+
+    const aprobar = accion === 'aceptar';
+
+    const confirmacion = await Swal.fire({
+      icon: aprobar ? 'question' : 'warning',
+      title: aprobar ? 'Aprobar club' : 'Rechazar club',
+      html: `
+        <p>Vas a ${aprobar ? 'aprobar' : 'rechazar'} la solicitud de:</p>
+        <p><strong>${club.nombre || 'Club sin nombre'}</strong></p>
+        <p>
+          ${
+            aprobar
+              ? 'El dueño y el club quedarán habilitados para operar en DameCancha.'
+              : 'El dueño y el club quedarán inactivos.'
+          }
+        </p>
+      `,
+      showCancelButton: true,
+      confirmButtonText: aprobar ? 'Sí, aprobar' : 'Sí, rechazar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: aprobar ? '#16a34a' : '#dc3545',
+      cancelButtonColor: '#64748b',
+      reverseButtons: true,
+    });
+
+    if (!confirmacion.isConfirmed) {
+      return;
+    }
+
+    setProcesandoClubPendienteId(club.id);
+
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error(
+          'La sesión no está disponible. Cerrá sesión e ingresá nuevamente.'
+        );
+      }
+
+      const response = await fetch(apiUrl(`/club/${club.id}/${accion}`), {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+            `No se pudo ${aprobar ? 'aprobar' : 'rechazar'} el club.`
+        );
+      }
+
+      await Promise.all([
+        fetchClubesPendientes(),
+        fetchClubesAceptados(),
+      ]);
+
+      await Swal.fire({
+        icon: 'success',
+        title: aprobar ? 'Club aprobado' : 'Club rechazado',
+        text: aprobar
+          ? 'El dueño y el club quedaron habilitados correctamente.'
+          : 'La solicitud fue rechazada y el club quedó inactivo.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+    } catch (error) {
+      console.error('Error al procesar solicitud de alta:', error);
+
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo procesar la solicitud',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    } finally {
+      setProcesandoClubPendienteId(null);
+    }
+  };
+
   // Cargar datos al montar el componente
   useEffect(() => {
+    fetchClubesPendientes();
     fetchClubesAceptados();
     fetchAdmins();
     fetchSolicitudesBaja();
@@ -314,7 +448,7 @@ const AdminPanel = ({ adminUser, onLogout }) => {
     }
   };
 
-  // Los clubes nuevos quedan activos de inmediato. El admin puede inactivarlos o reactivarlos.
+  // Los clubes nuevos quedan pendientes hasta que un administrador los aprueba o rechaza.
 
 
   return (
@@ -439,6 +573,86 @@ const AdminPanel = ({ adminUser, onLogout }) => {
           </div>
         </div>
       )}
+
+      {/* Solicitudes de alta de clubes */}
+      <div className="admin-section">
+        <h2 className="admin-section-title">
+          Solicitudes de alta ({clubesPendientes.length})
+        </h2>
+
+        {cargandoClubesPendientes ? (
+          <p className="admin-no-items">Cargando solicitudes de alta...</p>
+        ) : clubesPendientes.length === 0 ? (
+          <p className="admin-no-items">No hay nuevas solicitudes de clubes</p>
+        ) : (
+          <div className="admin-clubs-grid">
+            {clubesPendientes.map((club) => {
+              const procesando =
+                String(procesandoClubPendienteId) === String(club.id);
+
+              const canchas = Array.isArray(club.canchas)
+                ? club.canchas.join(', ')
+                : club.canchas || 'No informadas';
+
+              return (
+                <div key={club.id} className="admin-club-card">
+                  <div className="admin-club-header">
+                    <h3>{club.nombre || 'Club sin nombre'}</h3>
+                    <span className="admin-badge-status inactivo">
+                      Pendiente
+                    </span>
+                  </div>
+
+                  <div className="admin-club-details">
+                    <p>
+                      <strong>Email:</strong> {club.email || 'No disponible'}
+                    </p>
+                    <p>
+                      <strong>Teléfono:</strong> {club.telefono || 'No disponible'}
+                    </p>
+                    <p>
+                      <strong>Dirección:</strong> {club.direccion || 'No disponible'}
+                    </p>
+                    <p>
+                      <strong>Canchas:</strong> {canchas}
+                    </p>
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '10px',
+                      flexWrap: 'wrap',
+                      marginTop: '14px',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      className="admin-submit-btn"
+                      onClick={() => procesarSolicitudAlta(club, 'aceptar')}
+                      disabled={procesando}
+                    >
+                      <i className="bi bi-check-circle"></i>{' '}
+                      {procesando ? 'Procesando...' : 'Aprobar'}
+                    </button>
+
+                    <button
+                      type="button"
+                      className="admin-submit-btn"
+                      style={{ backgroundColor: '#dc3545' }}
+                      onClick={() => procesarSolicitudAlta(club, 'rechazar')}
+                      disabled={procesando}
+                    >
+                      <i className="bi bi-x-circle"></i>{' '}
+                      {procesando ? 'Procesando...' : 'Rechazar'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
       {/* Solicitudes de baja del servicio */}
       <div className="admin-section">

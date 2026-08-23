@@ -43,7 +43,7 @@
 ========================================================= */
 
 .layout--with-banners {
-  grid-template-columns: 230px minmax(0, 1fr) 230px;
+  grid-template-columns: 205px minmax(0, 1fr) 205px;
   gap: 18px;
 
   padding: 0 14px 18px;

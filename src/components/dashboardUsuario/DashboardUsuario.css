@@ -4289,3 +4289,149 @@
     -webkit-overflow-scrolling: auto;
   }
 }
+
+/* =========================================================
+   AJUSTE MOBILE - EVITAR PASOS DUPLICADOS
+   En escritorio se conserva el diseño actual.
+   En celular se muestra solamente el indicador superior.
+========================================================= */
+
+@media (max-width: 760px) {
+
+  /* Ocultamos el segundo listado de pasos */
+  .booking-sidebar {
+    display: none !important;
+  }
+
+  /* Al no existir sidebar, el contenido ocupa todo el ancho */
+  .booking-wizard {
+    display: block;
+    width: 100%;
+    padding-top: 10px;
+  }
+
+  /* Indicador superior compacto */
+  .steps-indicator {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0;
+  }
+
+  .step span {
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
+  }
+
+  .step::before {
+    top: 15px;
+  }
+
+  .step small {
+    font-size: 10px;
+    white-space: nowrap;
+  }
+}
+
+
+/* =========================================================
+   MOBILE - MENÚ DE RESERVA ANCLADO A LOS TRES PUNTOS
+   Solución única:
+   - Desktop conserva el dropdown existente.
+   - En mobile ocultamos el dropdown interno.
+   - El menú mobile se calcula desde el botón ⋮ realmente tocado.
+   - Si no entra abajo, abre arriba.
+   - No modifica el tamaño de la card.
+========================================================= */
+
+.reservation-mobile-menu-layer {
+  display: none;
+}
+
+@media (max-width: 760px) {
+
+  /* El dropdown desktop no se usa en mobile. */
+  .reservation-card__menu .reservation-card__dropdown {
+    display: none !important;
+  }
+
+  /*
+    Capa transparente solo para detectar toque fuera del menú.
+    No oscurece la pantalla.
+  */
+  .reservation-mobile-menu-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 50000;
+    display: block;
+    background: transparent;
+  }
+
+  /*
+    top / left / width llegan por style desde getBoundingClientRect()
+    del botón ⋮ que el usuario tocó.
+  */
+  .reservation-mobile-menu {
+    position: fixed;
+    z-index: 50001;
+
+    min-width: 160px;
+    max-width: calc(100vw - 20px);
+
+    padding: 6px;
+    border: 1px solid #d7e4f4;
+    border-radius: 11px;
+
+    background: #ffffff;
+    box-shadow: 0 14px 34px rgba(9, 37, 76, 0.22);
+
+    display: grid;
+    gap: 3px;
+  }
+
+  .reservation-mobile-menu__button {
+    width: 100%;
+    min-height: 42px;
+
+    padding: 8px 10px;
+    border: none;
+    border-radius: 8px;
+
+    background: transparent;
+    color: var(--azul-texto);
+
+    display: flex;
+    align-items: center;
+    gap: 9px;
+
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 900;
+    text-align: left;
+
+    cursor: pointer;
+  }
+
+  .reservation-mobile-menu__button i,
+  .reservation-mobile-menu__button .bi {
+    color: inherit;
+    font-size: 17px;
+  }
+
+  .reservation-mobile-menu__button--edit {
+    color: #d71920;
+  }
+
+  .reservation-mobile-menu__button--edit:active {
+    background: #fff0f0;
+  }
+
+  .reservation-mobile-menu__button--delete {
+    color: var(--azul-texto);
+  }
+
+  .reservation-mobile-menu__button--delete:active {
+    background: #eef5ff;
+  }
+}

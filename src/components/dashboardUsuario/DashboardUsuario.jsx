@@ -1039,6 +1039,7 @@ function DashboardUsuario({
     reservasEliminadas oculta del panel las reservas canceladas/eliminadas localmente.
   */
   const [menuReservaAbierto, setMenuReservaAbierto] = useState(null);
+  const [menuReservaPosicion, setMenuReservaPosicion] = useState(null);
   const [reservaEnEdicion, setReservaEnEdicion] = useState(null);
   const [reservasEliminadas, setReservasEliminadas] = useState([]);
   const [enviandoReserva, setEnviandoReserva] = useState(false);
@@ -1331,6 +1332,18 @@ function DashboardUsuario({
     Es la primera reserva futura ordenada por fecha y hora.
   */
   const proximaReserva = reservasFuturas[0] || null;
+
+  /*
+    Reserva cuyo menú está abierto.
+    En desktop sigue usando el dropdown normal.
+    En mobile usamos esta misma reserva para un popover anclado a los tres puntos.
+  */
+  const reservaMenuActiva =
+    reservasDelUsuario.find((reserva) => reserva.id === menuReservaAbierto) || null;
+
+  const reservaMenuActivaPasada = reservaMenuActiva
+    ? esReservaPasada(reservaMenuActiva)
+    : false;
 
   /*
     Calcula cuál es el paso activo.
@@ -1640,7 +1653,7 @@ function DashboardUsuario({
     Abre o cierra el menú de tres puntos de una reserva.
     Si la reserva ya no puede gestionarse, no abre el menú.
   */
-  const alternarMenuReserva = (reserva) => {
+  const alternarMenuReserva = (reserva, event) => {
     const puedeAbrirMenu =
       reserva.puedeGestionar ||
       esReservaPasada(reserva) ||
@@ -1648,9 +1661,49 @@ function DashboardUsuario({
 
     if (!puedeAbrirMenu) return;
 
-    setMenuReservaAbierto((idActual) =>
-      idActual === reserva.id ? null : reserva.id
-    );
+    // Segundo toque sobre la misma reserva: cerrar.
+    if (menuReservaAbierto === reserva.id) {
+      setMenuReservaAbierto(null);
+      setMenuReservaPosicion(null);
+      return;
+    }
+
+    const esMobile = window.matchMedia('(max-width: 760px)').matches;
+
+    if (esMobile && event?.currentTarget) {
+      const rect = event.currentTarget.getBoundingClientRect();
+
+      const anchoMenu = 172;
+      const cantidadAcciones =
+        (!esReservaPasada(reserva) && reserva.puedeGestionar ? 1 : 0) +
+        (puedeEliminarReserva(reserva) ? 1 : 0);
+
+      const altoMenu = Math.max(54, cantidadAcciones * 44 + 14);
+      const margen = 6;
+
+      // Alineado al borde derecho del botón ⋮.
+      const left = Math.min(
+        Math.max(10, rect.right - anchoMenu),
+        window.innerWidth - anchoMenu - 10
+      );
+
+      // Si no entra debajo del botón, se abre arriba.
+      const espacioDebajo = window.innerHeight - rect.bottom;
+      const top =
+        espacioDebajo >= altoMenu + margen
+          ? rect.bottom + margen
+          : Math.max(10, rect.top - altoMenu - margen);
+
+      setMenuReservaPosicion({
+        top,
+        left,
+        width: anchoMenu,
+      });
+    } else {
+      setMenuReservaPosicion(null);
+    }
+
+    setMenuReservaAbierto(reserva.id);
   };
 
   /*
@@ -1854,7 +1907,7 @@ function DashboardUsuario({
     );
     const debeConservarPagoAnterior = estadoPagoAnterior === 'pagado';
 
-   const fechaSQL = normalizarFechaParaComparar(fechaSeleccionada);
+    const fechaSQL = normalizarFechaParaComparar(fechaSeleccionada);
 
     const reservaDTO = {
       id_usuario: usuario.id_usuario,
@@ -2903,7 +2956,13 @@ function DashboardUsuario({
                       const reservaPasada = esReservaPasada(reserva);
 
                       return (
-                        <article key={reserva.id} className="reservation-card">
+                        <article
+                          key={reserva.id}
+                          className={`reservation-card ${menuReservaAbierto === reserva.id
+                              ? 'reservation-card--menu-open'
+                              : ''
+                            }`}
+                        >
                           <div className="reservation-card__date">
                             <small>{reserva.diaSemana}</small>
                             <strong>{reserva.dia}</strong>
@@ -2939,7 +2998,7 @@ function DashboardUsuario({
                               <button
                                 type="button"
                                 className="reservation-card__menu-button"
-                                onClick={() => alternarMenuReserva(reserva)}
+                                onClick={(event) => alternarMenuReserva(reserva, event)}
                                 disabled={
                                   !reserva.puedeGestionar &&
                                   !puedeEliminarReserva(reserva)
@@ -3149,6 +3208,59 @@ function DashboardUsuario({
               </div>
             </div>
           </article>
+        </div>
+      )}
+
+      {reservaMenuActiva && menuReservaPosicion && (
+        <div
+          className="reservation-mobile-menu-layer"
+          role="presentation"
+          onClick={() => {
+            setMenuReservaAbierto(null);
+            setMenuReservaPosicion(null);
+          }}
+        >
+          <div
+            className="reservation-mobile-menu"
+            role="menu"
+            aria-label="Acciones de la reserva"
+            style={{
+              top: `${menuReservaPosicion.top}px`,
+              left: `${menuReservaPosicion.left}px`,
+              width: `${menuReservaPosicion.width}px`,
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            {!reservaMenuActivaPasada && reservaMenuActiva.puedeGestionar && (
+              <button
+                type="button"
+                className="reservation-mobile-menu__button reservation-mobile-menu__button--edit"
+                onClick={() => {
+                  setMenuReservaPosicion(null);
+                  iniciarModificacionReserva(reservaMenuActiva);
+                }}
+              >
+                <i className="bi bi-pencil-square"></i>
+                Modificar
+              </button>
+            )}
+
+            {puedeEliminarReserva(reservaMenuActiva) && (
+              <button
+                type="button"
+                className="reservation-mobile-menu__button reservation-mobile-menu__button--delete"
+                onClick={() => {
+                  const reservaAEliminar = reservaMenuActiva;
+                  setMenuReservaAbierto(null);
+                  setMenuReservaPosicion(null);
+                  eliminarReserva(reservaAEliminar);
+                }}
+              >
+                <i className="bi bi-trash3"></i>
+                {reservaMenuActivaPasada ? 'Borrar del panel' : 'Eliminar'}
+              </button>
+            )}
+          </div>
         </div>
       )}
 
