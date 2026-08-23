@@ -13,6 +13,16 @@ const AdminPanel = ({ adminUser, onLogout }) => {
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Cambio de contraseña del administrador autenticado.
+  const [currentAdminPassword, setCurrentAdminPassword] = useState('');
+  const [newOwnAdminPassword, setNewOwnAdminPassword] = useState('');
+  const [confirmOwnAdminPassword, setConfirmOwnAdminPassword] = useState('');
+  const [showCurrentAdminPassword, setShowCurrentAdminPassword] = useState(false);
+  const [showNewOwnAdminPassword, setShowNewOwnAdminPassword] = useState(false);
+  const [showConfirmOwnAdminPassword, setShowConfirmOwnAdminPassword] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+
   const [clubesAceptados, setClubesAceptados] = useState([]);
 
   // Solicitudes de alta de clubes.
@@ -422,6 +432,100 @@ const AdminPanel = ({ adminUser, onLogout }) => {
     }
   };
 
+  const handleChangeOwnPassword = async (e) => {
+    e.preventDefault();
+
+    if (!currentAdminPassword || !newOwnAdminPassword || !confirmOwnAdminPassword) {
+      return Swal.fire({
+        icon: 'warning',
+        title: 'Campos incompletos',
+        text: 'Completá la contraseña actual y la nueva contraseña dos veces.',
+        confirmButtonColor: '#087bff',
+      });
+    }
+
+    if (newOwnAdminPassword !== confirmOwnAdminPassword) {
+      return Swal.fire({
+        icon: 'error',
+        title: 'Las contraseñas no coinciden',
+        text: 'Revisá la nueva contraseña y su confirmación.',
+        confirmButtonColor: '#087bff',
+      });
+    }
+
+    if (newOwnAdminPassword === currentAdminPassword) {
+      return Swal.fire({
+        icon: 'warning',
+        title: 'Elegí otra contraseña',
+        text: 'La nueva contraseña debe ser diferente a la actual.',
+        confirmButtonColor: '#087bff',
+      });
+    }
+
+    setChangingPassword(true);
+
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error(
+          'La sesión no está disponible. Cerrá sesión e ingresá nuevamente.'
+        );
+      }
+
+      const response = await fetch(apiUrl('/user/me/password'), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          currentPassword: currentAdminPassword,
+          newPassword: newOwnAdminPassword,
+          confirmPassword: confirmOwnAdminPassword,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message || 'No se pudo actualizar la contraseña.'
+        );
+      }
+
+      setCurrentAdminPassword('');
+      setNewOwnAdminPassword('');
+      setConfirmOwnAdminPassword('');
+      setShowCurrentAdminPassword(false);
+      setShowNewOwnAdminPassword(false);
+      setShowConfirmOwnAdminPassword(false);
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Contraseña actualizada',
+        text: 'Tu contraseña fue cambiada correctamente.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+    } catch (error) {
+      console.error('Error al cambiar contraseña:', error);
+
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo cambiar la contraseña',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
   const toggleClubStatus = async (clubId, currentActivo) => {
     try {
       const token = localStorage.getItem('token'); // Asegúrate de que el token esté almacenado en localStorage
@@ -486,7 +590,156 @@ const AdminPanel = ({ adminUser, onLogout }) => {
             </div>
           </div>
 
-<div className="admin-form-box">
+          <div className="admin-form-box">
+            <h3>Cambiar mi contraseña</h3>
+            <form onSubmit={handleChangeOwnPassword} className="admin-add-form">
+              <div className="admin-form-group">
+                <label htmlFor="currentAdminPassword">Contraseña actual:</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    id="currentAdminPassword"
+                    type={showCurrentAdminPassword ? 'text' : 'password'}
+                    placeholder="Contraseña actual"
+                    value={currentAdminPassword}
+                    onChange={(e) => setCurrentAdminPassword(e.target.value)}
+                    className="admin-input"
+                    autoComplete="current-password"
+                    required
+                    style={{ paddingRight: '48px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentAdminPassword((prev) => !prev)}
+                    aria-label={
+                      showCurrentAdminPassword
+                        ? 'Ocultar contraseña actual'
+                        : 'Mostrar contraseña actual'
+                    }
+                    style={{
+                      position: 'absolute',
+                      right: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      padding: '6px',
+                    }}
+                  >
+                    <i
+                      className={`bi ${
+                        showCurrentAdminPassword ? 'bi-eye-slash' : 'bi-eye'
+                      }`}
+                    ></i>
+                  </button>
+                </div>
+              </div>
+
+              <div className="admin-form-group">
+                <label htmlFor="newOwnAdminPassword">Nueva contraseña:</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    id="newOwnAdminPassword"
+                    type={showNewOwnAdminPassword ? 'text' : 'password'}
+                    placeholder="Nueva contraseña"
+                    value={newOwnAdminPassword}
+                    onChange={(e) => setNewOwnAdminPassword(e.target.value)}
+                    className="admin-input"
+                    minLength={8}
+                    maxLength={128}
+                    autoComplete="new-password"
+                    pattern="(?=.*[A-Za-zÁÉÍÓÚáéíóúÑñ])(?=.*\d).{8,128}"
+                    title="Debe tener al menos 8 caracteres, una letra y un número"
+                    required
+                    style={{ paddingRight: '48px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewOwnAdminPassword((prev) => !prev)}
+                    aria-label={
+                      showNewOwnAdminPassword
+                        ? 'Ocultar nueva contraseña'
+                        : 'Mostrar nueva contraseña'
+                    }
+                    style={{
+                      position: 'absolute',
+                      right: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      padding: '6px',
+                    }}
+                  >
+                    <i
+                      className={`bi ${
+                        showNewOwnAdminPassword ? 'bi-eye-slash' : 'bi-eye'
+                      }`}
+                    ></i>
+                  </button>
+                </div>
+              </div>
+
+              <div className="admin-form-group">
+                <label htmlFor="confirmOwnAdminPassword">Repetir nueva contraseña:</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    id="confirmOwnAdminPassword"
+                    type={showConfirmOwnAdminPassword ? 'text' : 'password'}
+                    placeholder="Repetir nueva contraseña"
+                    value={confirmOwnAdminPassword}
+                    onChange={(e) => setConfirmOwnAdminPassword(e.target.value)}
+                    className="admin-input"
+                    minLength={8}
+                    maxLength={128}
+                    autoComplete="new-password"
+                    required
+                    style={{ paddingRight: '48px' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmOwnAdminPassword((prev) => !prev)}
+                    aria-label={
+                      showConfirmOwnAdminPassword
+                        ? 'Ocultar confirmación de contraseña'
+                        : 'Mostrar confirmación de contraseña'
+                    }
+                    style={{
+                      position: 'absolute',
+                      right: '10px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      border: 'none',
+                      background: 'transparent',
+                      cursor: 'pointer',
+                      padding: '6px',
+                    }}
+                  >
+                    <i
+                      className={`bi ${
+                        showConfirmOwnAdminPassword ? 'bi-eye-slash' : 'bi-eye'
+                      }`}
+                    ></i>
+                  </button>
+                </div>
+              </div>
+
+              <p style={{ marginTop: 0, opacity: 0.85 }}>
+                Mínimo 8 caracteres, una letra y un número.
+              </p>
+
+              <button
+                type="submit"
+                className="admin-submit-btn"
+                disabled={changingPassword}
+              >
+                {changingPassword ? 'Actualizando...' : 'Cambiar contraseña'}
+              </button>
+            </form>
+          </div>
+
+          <div className="admin-form-box">
              <h3>Agregar Nuevo Admin</h3>
              <form onSubmit={handleAddAdmin} className="admin-add-form">
                <div className="admin-form-group">
