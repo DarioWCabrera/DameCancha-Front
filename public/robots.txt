@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+
+Disallow: /admin-login
+Disallow: /register-club
+Disallow: /register-usuario
+Disallow: /dashboardUsuario
+Disallow: /banco-de-suplentes
+Disallow: /panelDelClub
+Disallow: /panelAdmin
+
+Sitemap: https://damecancha.com.ar/sitemap.xml
