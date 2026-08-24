@@ -24,6 +24,9 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
   const [mostrarModalSuscripcion, setMostrarModalSuscripcion] = useState(false);
+  const [solicitandoBaja, setSolicitandoBaja] = useState(false);
+  const [cancelandoReservaId, setCancelandoReservaId] = useState(null);
+  const [reservasCanceladasLocal, setReservasCanceladasLocal] = useState([]);
 
   const abrirModalSuscripcion = () => {
     setMostrarModalSuscripcion(true);
@@ -138,6 +141,98 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     club?.id_club ||
     club?.id ||
     null;
+
+  const handleSolicitarBajaServicio = async () => {
+    if (!idClubActual) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'Club no disponible',
+        text: 'No se pudo identificar el club.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+      return;
+    }
+
+    const confirmacion = await Swal.fire({
+      icon: 'warning',
+      title: 'Solicitar baja del servicio',
+      text: 'La solicitud será enviada al administrador de DameCancha para su revisión.',
+      input: 'textarea',
+      inputLabel: 'Motivo de la baja (opcional)',
+      inputPlaceholder: 'Podés contarnos brevemente el motivo...',
+      inputAttributes: {
+        maxlength: '1000',
+      },
+      showCancelButton: true,
+      confirmButtonText: 'Enviar solicitud',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc3545',
+      cancelButtonColor: '#64748b',
+      reverseButtons: true,
+    });
+
+    if (!confirmacion.isConfirmed) return;
+
+    setSolicitandoBaja(true);
+
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error(
+          'La sesión no está disponible. Cerrá sesión e ingresá nuevamente.'
+        );
+      }
+
+      const response = await fetch(apiUrl('/solicitud-baja'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          idClub: Number(idClubActual),
+          motivo: confirmacion.value?.trim() || undefined,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message || 'No se pudo registrar la solicitud de baja.'
+        );
+      }
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Solicitud enviada',
+        html: `
+          <p>Recibimos correctamente tu solicitud de baja.</p>
+          <p><strong>Código:</strong> ${data?.solicitud?.codigo || '-'}</p>
+          <p>La solicitud quedó pendiente de revisión.</p>
+        `,
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+    } catch (error) {
+      console.error('Error al solicitar baja del servicio:', error);
+
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo enviar la solicitud',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    } finally {
+      setSolicitandoBaja(false);
+    }
+  };
 
   /*
     Nombre del club.
@@ -2119,6 +2214,115 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
   };
 
 
+  const obtenerIdReserva = (reserva) =>
+    reserva?.id_reserva || reserva?.id || null;
+
+  const handleCancelarReservaClub = async (reserva) => {
+    const idReserva = obtenerIdReserva(reserva);
+
+    if (!idReserva) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'Reserva no disponible',
+        text: 'No se pudo identificar la reserva.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+      return;
+    }
+
+    const confirmacion = await Swal.fire({
+      icon: 'warning',
+      title: 'Cancelar reserva',
+      html: `
+        <p>Vas a cancelar la reserva de <strong>${reserva.cliente_nombre || 'este usuario'}</strong>.</p>
+        <p>${formatearFecha(reserva.fecha)} · ${reserva.hora || ''} hs · ${reserva.cancha || reserva.deporte || ''}</p>
+      `,
+      input: 'textarea',
+      inputLabel: 'Motivo de la cancelación',
+      inputPlaceholder: 'Ej.: cancha cerrada por lluvia, mantenimiento, inconveniente operativo...',
+      inputAttributes: {
+        maxlength: '500',
+      },
+      inputValidator: (value) => {
+        if (!value || !value.trim()) {
+          return 'Indicá el motivo de la cancelación.';
+        }
+        return undefined;
+      },
+      showCancelButton: true,
+      confirmButtonText: 'Sí, cancelar reserva',
+      cancelButtonText: 'Volver',
+      confirmButtonColor: '#dc3545',
+      cancelButtonColor: '#64748b',
+      reverseButtons: true,
+    });
+
+    if (!confirmacion.isConfirmed) return;
+
+    setCancelandoReservaId(String(idReserva));
+
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error(
+          'La sesión no está disponible. Cerrá sesión e ingresá nuevamente.'
+        );
+      }
+
+      const response = await fetch(apiUrl(`/reserva/${idReserva}`), {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          motivo: confirmacion.value.trim(),
+        }),
+      });
+
+      const data = await leerRespuestaHttp(response);
+
+      if (!response.ok) {
+        throw new Error(
+          obtenerMensajeError(
+            data,
+            `No se pudo cancelar la reserva. Error HTTP ${response.status}.`
+          )
+        );
+      }
+
+      setReservasCanceladasLocal((prev) => {
+        const clave = String(idReserva);
+        return prev.includes(clave) ? prev : [...prev, clave];
+      });
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Reserva cancelada',
+        text: 'El turno quedó liberado y el usuario será notificado por email.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+    } catch (error) {
+      console.error('Error al cancelar reserva desde el club:', error);
+
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo cancelar la reserva',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    } finally {
+      setCancelandoReservaId(null);
+    }
+  };
+
   const normalizarFecha = (fecha) => {
     if (!fecha) return null;
 
@@ -2173,7 +2377,10 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     Conservamos también las canceladas para poder calcular el historial de
     cancelaciones por usuario, pero las excluimos de las métricas y agendas activas.
   */
-  const reservasDelClub = reservas;
+  const reservasDelClub = reservas.filter((reserva) => {
+    const idReserva = obtenerIdReserva(reserva);
+    return !idReserva || !reservasCanceladasLocal.includes(String(idReserva));
+  });
 
   const esReservaCancelada = (reserva) => {
     const estado = String(reserva?.estado || '').trim().toLowerCase();
@@ -2999,6 +3206,68 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                     })}
                   </div>
                 )}
+
+                {/* BAJA DEL SERVICIO */}
+                <div
+                  className="pdc-settings-box"
+                  style={{
+                    marginTop: '18px',
+                    border: '1px solid rgba(239, 68, 68, 0.55)',
+                    background: 'rgba(127, 29, 29, 0.16)',
+                  }}
+                >
+                  <div style={{ marginBottom: '14px' }}>
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        marginBottom: '6px',
+                        color: '#fca5a5',
+                        fontSize: '11px',
+                        fontWeight: 800,
+                        letterSpacing: '0.08em',
+                      }}
+                    >
+                      SUSCRIPCIÓN
+                    </span>
+
+                    <h3 style={{ marginBottom: '6px' }}>
+                      Dar de baja el servicio
+                    </h3>
+
+                    <p
+                      className="pdc-settings-description"
+                      style={{ marginBottom: 0 }}
+                    >
+                      Si ya no querés continuar utilizando DameCancha, podés enviar
+                      una solicitud de baja. La solicitud será revisada por nuestro
+                      equipo antes de ser procesada.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleSolicitarBajaServicio}
+                    disabled={solicitandoBaja}
+                    style={{
+                      border: '1px solid #ef4444',
+                      borderRadius: '7px',
+                      background: '#dc3545',
+                      color: '#ffffff',
+                      padding: '10px 14px',
+                      fontWeight: 700,
+                      cursor: solicitandoBaja ? 'not-allowed' : 'pointer',
+                      opacity: solicitandoBaja ? 0.65 : 1,
+                    }}
+                  >
+                    <i
+                      className="bi bi-box-arrow-down"
+                      style={{ marginRight: '7px' }}
+                    ></i>
+                    {solicitandoBaja
+                      ? 'Enviando solicitud...'
+                      : 'Solicitar baja del servicio'}
+                  </button>
+                </div>
               </div>
             </div>
           </section>
@@ -3191,7 +3460,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
               <p className="pdc-alert pdc-alert-info">No hay próximas reservas.</p>
             ) : (
               reservasProximas.map((reserva, index) => (
-                <div className="pdc-reservation-row" key={reserva.id || index}>
+                <div className="pdc-reservation-row" key={obtenerIdReserva(reserva) || index}>
                   <span>{reserva.hora}</span>
 
                   <div className="pdc-reservation-info">
@@ -3228,9 +3497,32 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                     </div>
                   </div>
 
-                  <small className="pdc-confirmed">
-                    {reserva.estado || 'Confirmada'}
-                  </small>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-end',
+                      gap: '8px',
+                    }}
+                  >
+                    <small className="pdc-confirmed">
+                      {reserva.estado || 'Confirmada'}
+                    </small>
+
+                   <button
+  type="button"
+  className="pdc-cancel-reservation"
+  onClick={() => handleCancelarReservaClub(reserva)}
+  disabled={
+    cancelandoReservaId === String(obtenerIdReserva(reserva))
+  }
+  title="Cancelar esta reserva"
+>
+  {cancelandoReservaId === String(obtenerIdReserva(reserva))
+    ? 'Cancelando...'
+    : 'Cancelar'}
+</button>
+                  </div>
                 </div>
               ))
             )}
@@ -3244,7 +3536,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                   <p>No hay reservas cargadas en el calendario.</p>
                 ) : (
                   reservasProximas.map((reserva, index) => (
-                    <div className="pdc-calendar-preview-item" key={reserva.id || index}>
+                    <div className="pdc-calendar-preview-item" key={obtenerIdReserva(reserva) || index}>
                       <div>
                         <strong>{formatearFecha(reserva.fecha)}</strong>
                         <span>{reserva.hora}</span>

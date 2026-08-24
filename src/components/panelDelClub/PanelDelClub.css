@@ -2789,3 +2789,236 @@
     max-width: 55%;
   }
 }
+/* =========================================================
+   PROXIMAS RESERVAS - VERSION COMPACTA CON ACCIONES
+========================================================= */
+
+.pdc-reservation-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+
+  margin-bottom: 8px;
+  padding: 11px 10px;
+
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+
+  background: rgba(255, 255, 255, 0.045);
+
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.pdc-reservation-row:hover {
+  background: rgba(255, 255, 255, 0.075);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+/* Hora */
+.pdc-reservation-row > span:first-child {
+  font-size: 0.92rem;
+  font-weight: 900;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+/* Información principal */
+.pdc-reservation-info {
+  min-width: 0;
+}
+
+.pdc-reservation-info > strong {
+  display: block;
+  margin-bottom: 2px;
+
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.pdc-reservation-info > p {
+  margin: 0 0 6px;
+
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+
+/* Usuario + teléfono */
+.pdc-reservation-client {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 10px;
+
+  font-size: 0.72rem;
+}
+
+.pdc-reservation-client span,
+.pdc-reservation-client a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: none;
+}
+
+.pdc-reservation-client a:hover {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
+/* Estado Confirmada */
+.pdc-reservation-row .pdc-confirmed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 78px;
+  height: 24px;
+  padding: 0 10px;
+
+  border-radius: 999px;
+
+  background: rgba(74, 222, 128, 0.16);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+
+  color: #86efac;
+
+  font-size: 0.67rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+/* Contenedor derecho: estado + cancelar */
+.pdc-reservation-row > div:last-child {
+  min-width: 82px;
+}
+
+/* Botón agregado desde JSX */
+
+.pdc-reservation-row > div:last-child button:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.2) !important;
+  border-color: #ef4444 !important;
+  color: #ffffff !important;
+  transform: translateY(-1px);
+}
+
+.pdc-reservation-row > div:last-child button:disabled {
+  cursor: not-allowed !important;
+  opacity: 0.55 !important;
+}
+
+/* Historial de cancelaciones del usuario */
+.pdc-cancellation-count {
+  display: inline-flex;
+  align-items: center;
+
+  padding: 2px 6px;
+
+  border-radius: 999px;
+
+  background: rgba(250, 204, 21, 0.12);
+  color: #fde68a;
+
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.pdc-cancellation-count.is-warning {
+  background: rgba(239, 68, 68, 0.13);
+  color: #fca5a5;
+}
+
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 760px) {
+  .pdc-reservation-row {
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+    gap: 8px;
+
+    padding: 10px 8px;
+  }
+
+  .pdc-reservation-info > strong {
+    font-size: 0.82rem;
+  }
+
+  .pdc-reservation-info > p {
+    font-size: 0.68rem;
+  }
+
+  .pdc-reservation-client {
+    gap: 4px 7px;
+    font-size: 0.66rem;
+  }
+
+  .pdc-reservation-row > div:last-child {
+    min-width: 72px;
+  }
+
+  .pdc-reservation-row .pdc-confirmed {
+  min-width: 70px;
+  padding: 4px 6px;
+  font-size: 0.61rem;
+}
+
+.pdc-reservation-row > div:last-child button {
+  padding: 5px 6px !important;
+  font-size: 0.61rem !important;
+}
+}
+
+.pdc-reservation-row .pdc-confirmed,
+.pdc-reservation-row .pdc-cancel-reservation {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 78px;
+  height: 24px;
+  padding: 0;
+
+  border-radius: 999px;
+
+  font-size: 0.67rem;
+  font-weight: 900;
+  line-height: 1;
+
+  box-sizing: border-box;
+}
+
+/* Confirmada */
+.pdc-reservation-row .pdc-confirmed {
+  background: rgba(74, 222, 128, 0.16);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  color: #86efac;
+}
+
+/* Cancelar */
+.pdc-reservation-row .pdc-cancel-reservation {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  color: #fca5a5;
+  cursor: pointer;
+}
+
+.pdc-reservation-row .pdc-cancel-reservation:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.22);
+  border-color: #ef4444;
+  color: #ffffff;
+}
+
+.pdc-reservation-row .pdc-cancel-reservation:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
