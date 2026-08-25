@@ -22,6 +22,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
   */
   const [showSettings, setShowSettings] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [noMostrarWelcome, setNoMostrarWelcome] = useState(false);
 
   const [mostrarModalSuscripcion, setMostrarModalSuscripcion] = useState(false);
   const [solicitandoBaja, setSolicitandoBaja] = useState(false);
@@ -551,13 +552,19 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     return `damecancha_welcome_panel_seen_${clubId}`;
   };
 
+  const guardarPreferenciaWelcome = () => {
+    if (noMostrarWelcome) {
+      localStorage.setItem(getWelcomeStorageKey(), 'true');
+    }
+  };
+
   const cerrarWelcomeModal = () => {
-    localStorage.setItem(getWelcomeStorageKey(), 'true');
+    guardarPreferenciaWelcome();
     setShowWelcomeModal(false);
   };
 
   const irAConfiguracionDesdeWelcome = () => {
-    localStorage.setItem(getWelcomeStorageKey(), 'true');
+    guardarPreferenciaWelcome();
     setShowWelcomeModal(false);
     setShowSettings(true);
   };
@@ -1254,6 +1261,22 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     return mediaUrl(flyerUrl);
   };
 
+  const deportesDelClub = Array.from(
+    new Map(
+      canchas
+        .map((cancha) => cancha.id_deporte || cancha.deporte)
+        .filter((deporte) => deporte?.id_deporte)
+        .map((deporte) => [
+          Number(deporte.id_deporte),
+          deporte,
+        ])
+    ).values()
+  ).sort((a, b) =>
+    String(a.nombre_deporte || '').localeCompare(
+      String(b.nombre_deporte || '')
+    )
+  );
+
   const obtenerIdDeporteTorneo = (torneo) =>
     torneo?.deporte?.id_deporte ||
     torneo?.id_deporte?.id_deporte ||
@@ -1453,6 +1476,16 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
       return 'Seleccioná el deporte del torneo.';
     }
 
+    const deporteDisponibleEnClub = deportesDelClub.some(
+      (deporte) =>
+        Number(deporte.id_deporte) ===
+        Number(torneoForm.id_deporte)
+    );
+
+    if (!deporteDisponibleEnClub) {
+      return 'El deporte seleccionado no está disponible en este club.';
+    }
+
     if (!torneoForm.fecha_inicio || !torneoForm.fecha_fin) {
       return 'Completá la fecha de inicio y la fecha de finalización.';
     }
@@ -1463,10 +1496,6 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
     if (torneoForm.descripcion.trim().length < 10) {
       return 'La descripción debe tener al menos 10 caracteres.';
-    }
-
-    if (!torneoEditandoId && !flyerTorneo) {
-      return 'Seleccioná el flyer del torneo.';
     }
 
     return '';
@@ -1497,21 +1526,54 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
         );
       }
 
+      const esEdicion = Boolean(torneoEditandoId);
+
       const formData = new FormData();
-      formData.append('id_club', String(idClubActual));
-      formData.append('id_deporte', String(torneoForm.id_deporte));
-      formData.append('titulo', torneoForm.titulo.trim());
-      formData.append('descripcion', torneoForm.descripcion.trim());
-      formData.append('fecha_inicio', torneoForm.fecha_inicio);
-      formData.append('fecha_fin', torneoForm.fecha_fin);
-      formData.append('contacto', torneoForm.contacto.trim());
-      formData.append('estado', estadoDestino);
+
+      if (!esEdicion) {
+        formData.append('id_club', String(idClubActual));
+      }
+
+      formData.append(
+        'id_deporte',
+        String(torneoForm.id_deporte)
+      );
+
+      formData.append(
+        'titulo',
+        torneoForm.titulo.trim()
+      );
+
+      formData.append(
+        'descripcion',
+        torneoForm.descripcion.trim()
+      );
+
+      formData.append(
+        'fecha_inicio',
+        torneoForm.fecha_inicio
+      );
+
+      formData.append(
+        'fecha_fin',
+        torneoForm.fecha_fin
+      );
+
+      formData.append(
+        'contacto',
+        torneoForm.contacto.trim()
+      );
+
+      formData.append(
+        'estado',
+        estadoDestino
+      );
 
       if (flyerTorneo) {
         formData.append('flyer', flyerTorneo);
       }
 
-      const esEdicion = Boolean(torneoEditandoId);
+
       const response = await fetch(
         esEdicion
           ? apiUrl(`/torneo/${torneoEditandoId}`)
@@ -3787,104 +3849,104 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
             {/* GRILLA PRINCIPAL: CANCHAS + PRÓXIMAS RESERVAS */}
             <section className="pdc-main-grid">
               <div className="pdc-panel pdc-courts-panel">
-  <div className="pdc-panel-header">
-    <h3>Canchas de tu club</h3>
-  </div>
+                <div className="pdc-panel-header">
+                  <h3>Canchas de tu club</h3>
+                </div>
 
-  <div className="pdc-courts-list">
-    {canchasProcesadas.length === 0 ? (
-                  <p className="pdc-alert pdc-alert-info">No hay canchas cargadas.</p>
-                ) : (
-                  canchasProcesadas.map((cancha) => (
-                    <div className="pdc-court-row" key={cancha.id_cancha}>
-                      <img
-                        src={cancha.img}
-                        alt={cancha.nombre_cancha}
-                        onError={(e) => {
-                          e.currentTarget.src =
-                            'https://images.unsplash.com/photo-1522778119026-d647f0596c20?w=500';
-                        }}
-                      />
+                <div className="pdc-courts-list">
+                  {canchasProcesadas.length === 0 ? (
+                    <p className="pdc-alert pdc-alert-info">No hay canchas cargadas.</p>
+                  ) : (
+                    canchasProcesadas.map((cancha) => (
+                      <div className="pdc-court-row" key={cancha.id_cancha}>
+                        <img
+                          src={cancha.img}
+                          alt={cancha.nombre_cancha}
+                          onError={(e) => {
+                            e.currentTarget.src =
+                              'https://images.unsplash.com/photo-1522778119026-d647f0596c20?w=500';
+                          }}
+                        />
 
-                      <div className="pdc-court-info">
-                        <h4>{cancha.nombre_cancha}</h4>
-                        <p>{cancha.deporte}</p>
-                        {(cancha.tipo_suelo || cancha.descripcion_cancha) && (
-                          <small>
-                            {[cancha.tipo_suelo, cancha.descripcion_cancha]
-                              .map((texto) => String(texto || '').trim())
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </small>
-                        )}
-                        <span>Activa</span>
+                        <div className="pdc-court-info">
+                          <h4>{cancha.nombre_cancha}</h4>
+                          <p>{cancha.deporte}</p>
+                          {(cancha.tipo_suelo || cancha.descripcion_cancha) && (
+                            <small>
+                              {[cancha.tipo_suelo, cancha.descripcion_cancha]
+                                .map((texto) => String(texto || '').trim())
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </small>
+                          )}
+                          <span>Activa</span>
+                        </div>
+
+                        {/* Precio por hora con botón de edición */}
+                        <div className="pdc-court-reservas">
+                          <p>Precio por hora</p>
+
+                          {editingCanchaId === cancha.id_cancha ? (
+                            <div className="pdc-price-editor">
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                value={editingPrice}
+                                onChange={handleEditingPriceChange}
+                                className="pdc-price-input"
+                                autoFocus
+                                placeholder="Ej: 40.000"
+                              />
+
+                              <button
+                                onClick={() => handleUpdatePrice(cancha.id_cancha)}
+                                className="pdc-btn-save-mini"
+                                title="Guardar"
+                              >
+                                <i className="bi bi-check"></i>
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  setEditingCanchaId(null);
+                                  setEditingPrice('');
+                                }}
+                                className="pdc-btn-cancel-mini"
+                                title="Cancelar"
+                              >
+                                <i className="bi bi-x"></i>
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="pdc-price-display">
+                              <strong>{formatMoney(cancha.precio_por_hora)}</strong>
+
+                              <button
+                                onClick={() => {
+                                  setEditingCanchaId(cancha.id_cancha);
+                                  setEditingPrice(formatPrice(normalizarImporteDesdeBackend(cancha.precio_por_hora || 0)));
+                                }}
+                                className="pdc-btn-edit-mini"
+                                title="Editar precio"
+                              >
+                                <i className="bi bi-pencil"></i>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Reservas de hoy de cada cancha */}
+                        <div className="pdc-court-reservas">
+                          <p>Reservas hoy</p>
+                          <strong>{cancha.reservasHoy}</strong>
+                          <small>Próxima: {cancha.proxima}</small>
+                        </div>
+
                       </div>
-
-                      {/* Precio por hora con botón de edición */}
-                      <div className="pdc-court-reservas">
-                        <p>Precio por hora</p>
-
-                        {editingCanchaId === cancha.id_cancha ? (
-                          <div className="pdc-price-editor">
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              value={editingPrice}
-                              onChange={handleEditingPriceChange}
-                              className="pdc-price-input"
-                              autoFocus
-                              placeholder="Ej: 40.000"
-                            />
-
-                            <button
-                              onClick={() => handleUpdatePrice(cancha.id_cancha)}
-                              className="pdc-btn-save-mini"
-                              title="Guardar"
-                            >
-                              <i className="bi bi-check"></i>
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                setEditingCanchaId(null);
-                                setEditingPrice('');
-                              }}
-                              className="pdc-btn-cancel-mini"
-                              title="Cancelar"
-                            >
-                              <i className="bi bi-x"></i>
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="pdc-price-display">
-                            <strong>{formatMoney(cancha.precio_por_hora)}</strong>
-
-                            <button
-                              onClick={() => {
-                                setEditingCanchaId(cancha.id_cancha);
-                                setEditingPrice(formatPrice(normalizarImporteDesdeBackend(cancha.precio_por_hora || 0)));
-                              }}
-                              className="pdc-btn-edit-mini"
-                              title="Editar precio"
-                            >
-                              <i className="bi bi-pencil"></i>
-                            </button>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Reservas de hoy de cada cancha */}
-                      <div className="pdc-court-reservas">
-                        <p>Reservas hoy</p>
-                        <strong>{cancha.reservasHoy}</strong>
-                        <small>Próxima: {cancha.proxima}</small>
-                      </div>
-
-                    </div>
-                  ))
-                )}
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
 
               {/* Panel de próximas reservas */}
               <div className="pdc-panel pdc-upcoming-reservations-panel">
@@ -4432,7 +4494,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                           required
                         >
                           <option value="">Seleccionar deporte</option>
-                          {deportesDisponibles.map((deporte) => (
+                          {deportesDelClub.map((deporte) => (
                             <option
                               key={deporte.id_deporte}
                               value={deporte.id_deporte}
@@ -4514,7 +4576,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                       </label>
 
                       <div className="pdc-tournament-field pdc-tournament-field--wide">
-                        <span>Flyer {torneoEditandoId ? '(opcional al editar)' : '*'}</span>
+                        <span>Flyer (opcional)</span>
 
                         <div className="pdc-tournament-flyer-control">
                           <input
@@ -4882,7 +4944,20 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                 </p>
               </div>
 
+              <label className="pdc-welcome-modal-dont-show">
+                <input
+                  type="checkbox"
+                  checked={noMostrarWelcome}
+                  onChange={(e) => setNoMostrarWelcome(e.target.checked)}
+                />
+
+                <span>No volver a mostrar este mensaje</span>
+              </label>
+
               <div className="pdc-welcome-modal-actions">
+
+
+
                 <button
                   type="button"
                   className="pdc-welcome-modal-primary"

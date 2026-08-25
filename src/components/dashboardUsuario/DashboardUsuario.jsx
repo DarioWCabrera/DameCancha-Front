@@ -20,6 +20,7 @@ import tenisIcon from '../imagenes/tennis.png';
 import natacionIcon from '../imagenes/natacion.png';
 import golfIcon from '../imagenes/golf.png';
 import futbol11Icon from '../imagenes/futbol11.png';
+import pelotaPaletaIcon from '../imagenes/PelotaPaleta.png';
 
 /*
   Imágenes de banners publicitarios.
@@ -47,6 +48,7 @@ const DEPORTES = [
   { id: 7, nombre: 'Natación', icono: natacionIcon },
   { id: 8, nombre: 'Golf', icono: golfIcon },
   { id: 9, nombre: 'Fútbol 11', icono: futbol11Icon },
+  { id: 10, nombre: 'Pelota Paleta', icono: pelotaPaletaIcon },
 ];
 
 /*
@@ -701,7 +703,12 @@ function DashboardUsuario({
       setCargandoTorneos(true);
 
       try {
+        const token = localStorage.getItem('token');
+
         const response = await fetch(`${API_URL}/torneo/publicados`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
           signal: controller.signal,
         });
 
@@ -1029,13 +1036,22 @@ function DashboardUsuario({
               // deportes_club viene en "canchas" desde el backend.
               // Si está vacío, extraemos los deportes desde detallesCanchas
               // que contiene la relación real cancha → deporte.
-              let deportes = c.canchas || [];
-              if ((!deportes || deportes.length === 0) && Array.isArray(c.detallesCanchas)) {
-                const deportesDesdeCancha = c.detallesCanchas
+              const deportesRegistrados = Array.isArray(c.canchas)
+                ? c.canchas
+                : [];
+
+              const deportesDesdeCanchas = Array.isArray(c.detallesCanchas)
+                ? c.detallesCanchas
                   .map((cancha) => cancha.deporte)
-                  .filter(Boolean);
-                deportes = [...new Set(deportesDesdeCancha)];
-              }
+                  .filter(Boolean)
+                : [];
+
+              const deportes = [
+                ...new Set([
+                  ...deportesRegistrados,
+                  ...deportesDesdeCanchas,
+                ]),
+              ];
 
               return {
                 id: c.id,
@@ -3076,8 +3092,8 @@ function DashboardUsuario({
                         <article
                           key={reserva.id}
                           className={`reservation-card ${menuReservaAbierto === reserva.id
-                              ? 'reservation-card--menu-open'
-                              : ''
+                            ? 'reservation-card--menu-open'
+                            : ''
                             }`}
                         >
                           <div className="reservation-card__date">

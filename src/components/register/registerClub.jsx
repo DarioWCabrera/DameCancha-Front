@@ -37,7 +37,7 @@ const CANCHAS_DISPONIBLES = [
   'Vóley',
   'Pádel',
   'Natación',
-  'Golf',
+  'Pelota Paleta',
 ];
 
 /*
