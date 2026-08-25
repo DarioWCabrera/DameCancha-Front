@@ -95,6 +95,25 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     estado: 'borrador',
   });
 
+  /*
+    Cartelera del club.
+    Cada anuncio puede tener título, texto libre e imagen opcional.
+    Los anuncios activos son los que después se muestran a los usuarios.
+  */
+  const [anunciosClub, setAnunciosClub] = useState([]);
+  const [cargandoAnunciosClub, setCargandoAnunciosClub] = useState(false);
+  const [guardandoAnuncioClub, setGuardandoAnuncioClub] = useState(false);
+  const [actualizandoAnuncioClubId, setActualizandoAnuncioClubId] = useState(null);
+  const [showAnuncioForm, setShowAnuncioForm] = useState(false);
+  const [anuncioEditandoId, setAnuncioEditandoId] = useState(null);
+  const [imagenAnuncioClub, setImagenAnuncioClub] = useState(null);
+  const [imagenAnuncioPreview, setImagenAnuncioPreview] = useState('');
+  const anuncioImagenInputRef = useRef(null);
+  const [anuncioForm, setAnuncioForm] = useState({
+    titulo: '',
+    contenido: '',
+  });
+
   const [editCancha, setEditCancha] = useState({
     nombre: '',
     deporte: '',
@@ -476,16 +495,16 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
             const storedUser = JSON.parse(rawUser);
             const updatedUser = storedUser?.club
               ? {
-                  ...storedUser,
-                  club: {
-                    ...storedUser.club,
-                    logo_club: nuevoLogo,
-                  },
-                }
-              : {
-                  ...storedUser,
+                ...storedUser,
+                club: {
+                  ...storedUser.club,
                   logo_club: nuevoLogo,
-                };
+                },
+              }
+              : {
+                ...storedUser,
+                logo_club: nuevoLogo,
+              };
 
             localStorage.setItem('user', JSON.stringify(updatedUser));
           }
@@ -1784,6 +1803,430 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     }
   };
 
+  const construirUrlImagenAnuncio = (imagenUrl) => {
+    if (!imagenUrl) return '';
+
+    if (
+      imagenUrl.startsWith('http://') ||
+      imagenUrl.startsWith('https://') ||
+      imagenUrl.startsWith('blob:')
+    ) {
+      return imagenUrl;
+    }
+
+    return mediaUrl(imagenUrl);
+  };
+
+  const limpiarFormularioAnuncio = () => {
+    if (imagenAnuncioPreview?.startsWith('blob:')) {
+      URL.revokeObjectURL(imagenAnuncioPreview);
+    }
+
+    setAnuncioForm({
+      titulo: '',
+      contenido: '',
+    });
+    setAnuncioEditandoId(null);
+    setImagenAnuncioClub(null);
+    setImagenAnuncioPreview('');
+
+    if (anuncioImagenInputRef.current) {
+      anuncioImagenInputRef.current.value = '';
+    }
+  };
+
+  const cerrarFormularioAnuncio = () => {
+    limpiarFormularioAnuncio();
+    setShowAnuncioForm(false);
+  };
+
+  const abrirFormularioNuevoAnuncio = () => {
+    limpiarFormularioAnuncio();
+    setShowAnuncioForm(true);
+
+    window.setTimeout(() => {
+      document
+        .querySelector('.pdc-announcement-form')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+  };
+
+  const cargarAnunciosClub = async () => {
+    if (!idClubActual) {
+      setAnunciosClub([]);
+      return;
+    }
+
+    setCargandoAnunciosClub(true);
+
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error(
+          'La sesión no está disponible. Cerrá sesión e ingresá nuevamente.'
+        );
+      }
+
+      const response = await fetch(
+        apiUrl(`/anuncio-club/club/${idClubActual}`),
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await leerRespuestaHttp(response);
+
+      if (!response.ok) {
+        throw new Error(
+          obtenerMensajeError(
+            data,
+            `No se pudo cargar la cartelera. Error HTTP ${response.status}.`
+          )
+        );
+      }
+
+      setAnunciosClub(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error al cargar cartelera del club:', error);
+      setAnunciosClub([]);
+
+      Swal.fire({
+        icon: 'error',
+        title: 'No se pudo cargar la cartelera',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    } finally {
+      setCargandoAnunciosClub(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!idClubActual) return;
+
+    cargarAnunciosClub();
+  }, [idClubActual]);
+
+  const handleImagenAnuncioChange = (e) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    const tiposPermitidos = ['image/jpeg', 'image/png', 'image/webp'];
+
+    if (!tiposPermitidos.includes(file.type)) {
+      e.target.value = '';
+
+      Swal.fire({
+        icon: 'warning',
+        title: 'Formato no permitido',
+        text: 'La imagen debe ser JPG, PNG o WEBP.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      e.target.value = '';
+
+      Swal.fire({
+        icon: 'warning',
+        title: 'Archivo demasiado grande',
+        text: 'La imagen no puede superar los 5 MB.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+      return;
+    }
+
+    if (imagenAnuncioPreview?.startsWith('blob:')) {
+      URL.revokeObjectURL(imagenAnuncioPreview);
+    }
+
+    setImagenAnuncioClub(file);
+    setImagenAnuncioPreview(URL.createObjectURL(file));
+  };
+
+  const iniciarEdicionAnuncio = (anuncio) => {
+    if (!anuncio?.id_anuncio) return;
+
+    if (imagenAnuncioPreview?.startsWith('blob:')) {
+      URL.revokeObjectURL(imagenAnuncioPreview);
+    }
+
+    setAnuncioEditandoId(anuncio.id_anuncio);
+    setAnuncioForm({
+      titulo: anuncio.titulo || '',
+      contenido: anuncio.contenido || '',
+    });
+    setImagenAnuncioClub(null);
+    setImagenAnuncioPreview(
+      construirUrlImagenAnuncio(anuncio.imagen_url)
+    );
+    setShowAnuncioForm(true);
+
+    window.setTimeout(() => {
+      document
+        .querySelector('.pdc-announcement-form')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+  };
+
+  const guardarAnuncioClub = async (e) => {
+    e.preventDefault();
+
+    if (!idClubActual) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Club no disponible',
+        text: 'No se pudo identificar el club.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+      return;
+    }
+
+    if (anuncioForm.contenido.trim().length < 3) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Completá el anuncio',
+        text: 'Escribí al menos 3 caracteres en el contenido de la publicación.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+      return;
+    }
+
+    setGuardandoAnuncioClub(true);
+
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error(
+          'La sesión no está disponible. Cerrá sesión e ingresá nuevamente.'
+        );
+      }
+
+      const esEdicion = Boolean(anuncioEditandoId);
+
+      const formData = new FormData();
+
+      /*
+        Al crear necesitamos indicar a qué club pertenece.
+        Al editar NO enviamos id_club porque un anuncio
+        no puede moverse de un club a otro.
+      */
+      if (!esEdicion) {
+        formData.append('id_club', String(idClubActual));
+      }
+
+      formData.append('titulo', anuncioForm.titulo.trim());
+      formData.append('contenido', anuncioForm.contenido.trim());
+
+      if (imagenAnuncioClub) {
+        formData.append('imagen', imagenAnuncioClub);
+      }
+      const response = await fetch(
+        esEdicion
+          ? apiUrl(`/anuncio-club/${anuncioEditandoId}`)
+          : apiUrl('/anuncio-club'),
+        {
+          method: esEdicion ? 'PATCH' : 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        }
+      );
+
+      const data = await leerRespuestaHttp(response);
+
+      if (!response.ok) {
+        throw new Error(
+          obtenerMensajeError(
+            data,
+            `No se pudo guardar el anuncio. Error HTTP ${response.status}.`
+          )
+        );
+      }
+
+      await cargarAnunciosClub();
+      cerrarFormularioAnuncio();
+
+      await Swal.fire({
+        icon: 'success',
+        title: esEdicion ? 'Anuncio actualizado' : 'Anuncio publicado',
+        text: esEdicion
+          ? 'Los cambios de la cartelera fueron guardados.'
+          : 'El anuncio ya está visible para los usuarios.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+    } catch (error) {
+      console.error('Error al guardar anuncio:', error);
+
+      Swal.fire({
+        icon: 'error',
+        title: 'No se pudo guardar el anuncio',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    } finally {
+      setGuardandoAnuncioClub(false);
+    }
+  };
+
+  const cambiarEstadoAnuncio = async (anuncio) => {
+    if (!anuncio?.id_anuncio) return;
+
+    const nuevoEstado = !Boolean(anuncio.activo);
+    setActualizandoAnuncioClubId(anuncio.id_anuncio);
+
+    try {
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(
+        apiUrl(`/anuncio-club/${anuncio.id_anuncio}/estado`),
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            activo: nuevoEstado,
+          }),
+        }
+      );
+
+      const data = await leerRespuestaHttp(response);
+
+      if (!response.ok) {
+        throw new Error(
+          obtenerMensajeError(
+            data,
+            `No se pudo actualizar el anuncio. Error HTTP ${response.status}.`
+          )
+        );
+      }
+
+      setAnunciosClub((prev) =>
+        prev.map((item) =>
+          item.id_anuncio === anuncio.id_anuncio
+            ? { ...item, activo: nuevoEstado }
+            : item
+        )
+      );
+    } catch (error) {
+      console.error('Error al cambiar estado del anuncio:', error);
+
+      Swal.fire({
+        icon: 'error',
+        title: 'No se pudo actualizar el anuncio',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    } finally {
+      setActualizandoAnuncioClubId(null);
+    }
+  };
+
+  const eliminarAnuncioClub = async (anuncio) => {
+    if (!anuncio?.id_anuncio) return;
+
+    const confirmacion = await Swal.fire({
+      icon: 'warning',
+      title: 'Eliminar anuncio',
+      text: `Vas a eliminar ${anuncio.titulo || 'esta publicación'
+        } de la cartelera. Esta acción no se puede deshacer.`,
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Volver',
+      confirmButtonColor: '#dc3545',
+      cancelButtonColor: '#64748b',
+      reverseButtons: true,
+    });
+
+    if (!confirmacion.isConfirmed) return;
+
+    setActualizandoAnuncioClubId(anuncio.id_anuncio);
+
+    try {
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(
+        apiUrl(`/anuncio-club/${anuncio.id_anuncio}`),
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await leerRespuestaHttp(response);
+
+      if (!response.ok) {
+        throw new Error(
+          obtenerMensajeError(
+            data,
+            `No se pudo eliminar el anuncio. Error HTTP ${response.status}.`
+          )
+        );
+      }
+
+      setAnunciosClub((prev) =>
+        prev.filter(
+          (item) => item.id_anuncio !== anuncio.id_anuncio
+        )
+      );
+
+      if (anuncioEditandoId === anuncio.id_anuncio) {
+        cerrarFormularioAnuncio();
+      }
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Anuncio eliminado',
+        text: 'La publicación fue eliminada de la cartelera.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+    } catch (error) {
+      console.error('Error al eliminar anuncio:', error);
+
+      Swal.fire({
+        icon: 'error',
+        title: 'No se pudo eliminar el anuncio',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    } finally {
+      setActualizandoAnuncioClubId(null);
+    }
+  };
+
   const handleAddCancha = async (e) => {
     e.preventDefault();
 
@@ -2803,9 +3246,8 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
                               <button
                                 type="button"
-                                className={`pdc-icon-action pdc-icon-action-block ${
-                                  editandoBloqueos ? 'is-active' : ''
-                                }`}
+                                className={`pdc-icon-action pdc-icon-action-block ${editandoBloqueos ? 'is-active' : ''
+                                  }`}
                                 title="Bloquear turnos"
                                 aria-label={`Bloquear turnos de ${cancha.nombre_cancha}`}
                                 aria-expanded={editandoBloqueos}
@@ -3190,7 +3632,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                                         >
                                           <i className="bi bi-unlock"></i>
                                           {eliminandoBloqueoId ===
-                                          bloqueo.id_bloqueo
+                                            bloqueo.id_bloqueo
                                             ? 'Liberando...'
                                             : 'Liberar'}
                                         </button>
@@ -3277,744 +3719,1083 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
           <>
             {/* CARDS SUPERIORES CON ESTADÍSTICAS */}
             <section className="pdc-stats-grid">
-          <div className="pdc-stat-card">
-            <div className="pdc-stat-icon pdc-green">
-              <i className="bi bi-bounding-box"></i>
-            </div>
-
-            <div>
-              <p>Canchas totales</p>
-              <h3>{canchasProcesadas.length}</h3>
-              <span>{canchasProcesadas.length} activas</span>
-            </div>
-          </div>
-
-          <div className="pdc-stat-card">
-            <div className="pdc-stat-icon pdc-blue">
-              <i className="bi bi-calendar-check"></i>
-            </div>
-
-            <div>
-              <p>Reservas hoy</p>
-              <h3>{reservasDeHoy.length}</h3>
-              <span>
-                {reservasDeHoy[0]
-                  ? `Próxima: ${reservasDeHoy[0].hora}`
-                  : 'Sin reservas hoy'}
-              </span>
-            </div>
-          </div>
-
-          <div className="pdc-stat-card">
-            <div className="pdc-stat-icon pdc-orange">
-              <i className="bi bi-people"></i>
-            </div>
-
-            <div>
-              <p>Reservas totales</p>
-              <h3>{reservasActivasDelClub.length}</h3>
-              <span>Total programadas</span>
-            </div>
-          </div>
-
-          <div className="pdc-stat-card">
-            <div className="pdc-stat-icon pdc-purple">
-              <i className="bi bi-currency-dollar"></i>
-            </div>
-
-            <div>
-              <p>Ingresos del día</p>
-              <h3>{formatMoney(ingresosHoy)}</h3>
-              <span className="pdc-positive">Hoy</span>
-            </div>
-          </div>
-
-          <div className="pdc-stat-card">
-            <div className="pdc-stat-icon pdc-purple">
-              <i className="bi bi-cash-stack"></i>
-            </div>
-
-            <div>
-              <p>Ingresos del mes</p>
-              <h3>{formatMoney(ingresosMes)}</h3>
-              <span className="pdc-positive">Mes actual</span>
-            </div>
-          </div>
-        </section>
-
-        {/* GRILLA PRINCIPAL: CANCHAS + PRÓXIMAS RESERVAS */}
-        <section className="pdc-main-grid">
-          <div className="pdc-panel">
-            <div className="pdc-panel-header">
-              <h3>Canchas de tu club</h3>
-            </div>
-
-            {canchasProcesadas.length === 0 ? (
-              <p className="pdc-alert pdc-alert-info">No hay canchas cargadas.</p>
-            ) : (
-              canchasProcesadas.map((cancha) => (
-                <div className="pdc-court-row" key={cancha.id_cancha}>
-                  <img
-                    src={cancha.img}
-                    alt={cancha.nombre_cancha}
-                    onError={(e) => {
-                      e.currentTarget.src =
-                        'https://images.unsplash.com/photo-1522778119026-d647f0596c20?w=500';
-                    }}
-                  />
-
-                  <div className="pdc-court-info">
-                    <h4>{cancha.nombre_cancha}</h4>
-                    <p>{cancha.deporte}</p>
-                    {(cancha.tipo_suelo || cancha.descripcion_cancha) && (
-                      <small>
-                        {[cancha.tipo_suelo, cancha.descripcion_cancha]
-                          .map((texto) => String(texto || '').trim())
-                          .filter(Boolean)
-                          .join(' · ')}
-                      </small>
-                    )}
-                    <span>Activa</span>
-                  </div>
-
-                  {/* Precio por hora con botón de edición */}
-                  <div className="pdc-court-reservas">
-                    <p>Precio por hora</p>
-
-                    {editingCanchaId === cancha.id_cancha ? (
-                      <div className="pdc-price-editor">
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={editingPrice}
-                          onChange={handleEditingPriceChange}
-                          className="pdc-price-input"
-                          autoFocus
-                          placeholder="Ej: 40.000"
-                        />
-
-                        <button
-                          onClick={() => handleUpdatePrice(cancha.id_cancha)}
-                          className="pdc-btn-save-mini"
-                          title="Guardar"
-                        >
-                          <i className="bi bi-check"></i>
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            setEditingCanchaId(null);
-                            setEditingPrice('');
-                          }}
-                          className="pdc-btn-cancel-mini"
-                          title="Cancelar"
-                        >
-                          <i className="bi bi-x"></i>
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="pdc-price-display">
-                        <strong>{formatMoney(cancha.precio_por_hora)}</strong>
-
-                        <button
-                          onClick={() => {
-                            setEditingCanchaId(cancha.id_cancha);
-                            setEditingPrice(formatPrice(normalizarImporteDesdeBackend(cancha.precio_por_hora || 0)));
-                          }}
-                          className="pdc-btn-edit-mini"
-                          title="Editar precio"
-                        >
-                          <i className="bi bi-pencil"></i>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Reservas de hoy de cada cancha */}
-                  <div className="pdc-court-reservas">
-                    <p>Reservas hoy</p>
-                    <strong>{cancha.reservasHoy}</strong>
-                    <small>Próxima: {cancha.proxima}</small>
-                  </div>
-
+              <div className="pdc-stat-card">
+                <div className="pdc-stat-icon pdc-green">
+                  <i className="bi bi-bounding-box"></i>
                 </div>
-              ))
-            )}
-          </div>
 
-          {/* Panel de próximas reservas */}
-          <div className="pdc-panel">
-            <div className="pdc-panel-header">
-              <h3>Próximas reservas</h3>
-
-              <button
-                className="pdc-light-button"
-                onClick={() => setShowCalendar(!showCalendar)}
-              >
-                {showCalendar ? 'Ocultar calendario' : 'Ver calendario'}
-                <i className="bi bi-calendar-event"></i>
-              </button>
-            </div>
-
-            {reservasProximas.length === 0 ? (
-              <p className="pdc-alert pdc-alert-info">No hay próximas reservas.</p>
-            ) : (
-              reservasProximas.map((reserva, index) => (
-                <div className="pdc-reservation-row" key={obtenerIdReserva(reserva) || index}>
-                  <span>{reserva.hora}</span>
-
-                  <div className="pdc-reservation-info">
-                    <strong>{reserva.deporte}</strong>
-                    <p>{formatearFecha(reserva.fecha)} · {reserva.cancha}</p>
-
-                    <div className="pdc-reservation-client">
-                      <span>
-                        <i className="bi bi-person-fill"></i>
-                        {reserva.cliente_nombre || 'Usuario'}
-                      </span>
-
-                      {reserva.cliente_telefono && (
-                        <a href={`tel:${reserva.cliente_telefono}`}>
-                          <i className="bi bi-telephone-fill"></i>
-                          {reserva.cliente_telefono}
-                        </a>
-                      )}
-
-                      {obtenerCancelacionesUsuario(reserva) > 0 && (
-                        <small
-                          className={`pdc-cancellation-count ${
-                            obtenerCancelacionesUsuario(reserva) >= 2 ? 'is-warning' : ''
-                          }`}
-                          title="Cancelaciones registradas por este usuario en tu club"
-                        >
-                          {obtenerCancelacionesUsuario(reserva)} {
-                            obtenerCancelacionesUsuario(reserva) === 1
-                              ? 'cancelación previa'
-                              : 'cancelaciones previas'
-                          }
-                        </small>
-                      )}
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'flex-end',
-                      gap: '8px',
-                    }}
-                  >
-                    <small className="pdc-confirmed">
-                      {reserva.estado || 'Confirmada'}
-                    </small>
-
-                   <button
-  type="button"
-  className="pdc-cancel-reservation"
-  onClick={() => handleCancelarReservaClub(reserva)}
-  disabled={
-    cancelandoReservaId === String(obtenerIdReserva(reserva))
-  }
-  title="Cancelar esta reserva"
->
-  {cancelandoReservaId === String(obtenerIdReserva(reserva))
-    ? 'Cancelando...'
-    : 'Cancelar'}
-</button>
-                  </div>
+                <div>
+                  <p>Canchas totales</p>
+                  <h3>{canchasProcesadas.length}</h3>
+                  <span>{canchasProcesadas.length} activas</span>
                 </div>
-              ))
-            )}
+              </div>
 
-            {/* Calendario simple desplegable */}
-            {showCalendar && (
-              <div className="pdc-calendar-preview">
-                <h4>Calendario de reservas</h4>
+              <div className="pdc-stat-card">
+                <div className="pdc-stat-icon pdc-blue">
+                  <i className="bi bi-calendar-check"></i>
+                </div>
 
-                {reservasProximas.length === 0 ? (
-                  <p>No hay reservas cargadas en el calendario.</p>
+                <div>
+                  <p>Reservas hoy</p>
+                  <h3>{reservasDeHoy.length}</h3>
+                  <span>
+                    {reservasDeHoy[0]
+                      ? `Próxima: ${reservasDeHoy[0].hora}`
+                      : 'Sin reservas hoy'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="pdc-stat-card">
+                <div className="pdc-stat-icon pdc-orange">
+                  <i className="bi bi-people"></i>
+                </div>
+
+                <div>
+                  <p>Reservas totales</p>
+                  <h3>{reservasActivasDelClub.length}</h3>
+                  <span>Total programadas</span>
+                </div>
+              </div>
+
+              <div className="pdc-stat-card">
+                <div className="pdc-stat-icon pdc-purple">
+                  <i className="bi bi-currency-dollar"></i>
+                </div>
+
+                <div>
+                  <p>Ingresos del día</p>
+                  <h3>{formatMoney(ingresosHoy)}</h3>
+                  <span className="pdc-positive">Hoy</span>
+                </div>
+              </div>
+
+              <div className="pdc-stat-card">
+                <div className="pdc-stat-icon pdc-purple">
+                  <i className="bi bi-cash-stack"></i>
+                </div>
+
+                <div>
+                  <p>Ingresos del mes</p>
+                  <h3>{formatMoney(ingresosMes)}</h3>
+                  <span className="pdc-positive">Mes actual</span>
+                </div>
+              </div>
+            </section>
+
+            {/* GRILLA PRINCIPAL: CANCHAS + PRÓXIMAS RESERVAS */}
+            <section className="pdc-main-grid">
+              <div className="pdc-panel pdc-courts-panel">
+  <div className="pdc-panel-header">
+    <h3>Canchas de tu club</h3>
+  </div>
+
+  <div className="pdc-courts-list">
+    {canchasProcesadas.length === 0 ? (
+                  <p className="pdc-alert pdc-alert-info">No hay canchas cargadas.</p>
                 ) : (
-                  reservasProximas.map((reserva, index) => (
-                    <div className="pdc-calendar-preview-item" key={obtenerIdReserva(reserva) || index}>
-                      <div>
-                        <strong>{formatearFecha(reserva.fecha)}</strong>
-                        <span>{reserva.hora}</span>
+                  canchasProcesadas.map((cancha) => (
+                    <div className="pdc-court-row" key={cancha.id_cancha}>
+                      <img
+                        src={cancha.img}
+                        alt={cancha.nombre_cancha}
+                        onError={(e) => {
+                          e.currentTarget.src =
+                            'https://images.unsplash.com/photo-1522778119026-d647f0596c20?w=500';
+                        }}
+                      />
+
+                      <div className="pdc-court-info">
+                        <h4>{cancha.nombre_cancha}</h4>
+                        <p>{cancha.deporte}</p>
+                        {(cancha.tipo_suelo || cancha.descripcion_cancha) && (
+                          <small>
+                            {[cancha.tipo_suelo, cancha.descripcion_cancha]
+                              .map((texto) => String(texto || '').trim())
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </small>
+                        )}
+                        <span>Activa</span>
                       </div>
 
-                      <div className="pdc-calendar-reservation-detail">
-                        <p>{reserva.deporte}</p>
-                        <small>{reserva.cliente_nombre || 'Usuario'}</small>
-                        {reserva.cliente_telefono && (
-                          <a href={`tel:${reserva.cliente_telefono}`}>{reserva.cliente_telefono}</a>
+                      {/* Precio por hora con botón de edición */}
+                      <div className="pdc-court-reservas">
+                        <p>Precio por hora</p>
+
+                        {editingCanchaId === cancha.id_cancha ? (
+                          <div className="pdc-price-editor">
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={editingPrice}
+                              onChange={handleEditingPriceChange}
+                              className="pdc-price-input"
+                              autoFocus
+                              placeholder="Ej: 40.000"
+                            />
+
+                            <button
+                              onClick={() => handleUpdatePrice(cancha.id_cancha)}
+                              className="pdc-btn-save-mini"
+                              title="Guardar"
+                            >
+                              <i className="bi bi-check"></i>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setEditingCanchaId(null);
+                                setEditingPrice('');
+                              }}
+                              className="pdc-btn-cancel-mini"
+                              title="Cancelar"
+                            >
+                              <i className="bi bi-x"></i>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="pdc-price-display">
+                            <strong>{formatMoney(cancha.precio_por_hora)}</strong>
+
+                            <button
+                              onClick={() => {
+                                setEditingCanchaId(cancha.id_cancha);
+                                setEditingPrice(formatPrice(normalizarImporteDesdeBackend(cancha.precio_por_hora || 0)));
+                              }}
+                              className="pdc-btn-edit-mini"
+                              title="Editar precio"
+                            >
+                              <i className="bi bi-pencil"></i>
+                            </button>
+                          </div>
                         )}
                       </div>
+
+                      {/* Reservas de hoy de cada cancha */}
+                      <div className="pdc-court-reservas">
+                        <p>Reservas hoy</p>
+                        <strong>{cancha.reservasHoy}</strong>
+                        <small>Próxima: {cancha.proxima}</small>
+                      </div>
+
                     </div>
                   ))
                 )}
               </div>
-            )}
-          </div>
-        </section>
-
-        {/* GRILLA INFERIOR: TORNEOS + LOGO */}
-        <section className="pdc-bottom-grid">
-          <div className="pdc-panel pdc-tournaments-panel">
-            <div className="pdc-tournaments-header">
-              <div>
-                <span className="pdc-tournaments-kicker">GESTIÓN DEL CLUB</span>
-                <h3>Torneos</h3>
-                <p>
-                  Creá la publicación, cargá el flyer y administrá su estado
-                  sin salir del panel.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                className="pdc-create-tournament-button"
-                onClick={
-                  showTournamentForm
-                    ? cerrarFormularioTorneo
-                    : abrirFormularioNuevoTorneo
-                }
-              >
-                <i
-                  className={
-                    showTournamentForm
-                      ? 'bi bi-x-circle'
-                      : 'bi bi-plus-circle'
-                  }
-                ></i>
-                {showTournamentForm ? 'Cerrar formulario' : 'Crear torneo'}
-              </button>
             </div>
 
-            {showTournamentForm && (
-              <form
-                className="pdc-tournament-form"
-                onSubmit={handleSubmitTorneo}
-              >
-                <div className="pdc-tournament-form-heading">
-                  <div>
-                    <span>
-                      {torneoEditandoId ? 'EDITANDO PUBLICACIÓN' : 'NUEVO TORNEO'}
-                    </span>
-                    <h4>
-                      {torneoEditandoId
-                        ? 'Actualizá los datos del torneo'
-                        : 'Completá la información del torneo'}
-                    </h4>
-                  </div>
-
-                  {torneoEditandoId && (
-                    <button
-                      type="button"
-                      className="pdc-tournament-form-reset"
-                      onClick={abrirFormularioNuevoTorneo}
-                    >
-                      <i className="bi bi-plus-lg"></i>
-                      Crear otro
-                    </button>
-                  )}
-                </div>
-
-                <div className="pdc-tournament-form-grid">
-                  <label className="pdc-tournament-field pdc-tournament-field--wide">
-                    <span>Título *</span>
-                    <input
-                      type="text"
-                      minLength={3}
-                      maxLength={180}
-                      placeholder="Ej: Copa de Verano Fútbol 7"
-                      value={torneoForm.titulo}
-                      onChange={(e) =>
-                        setTorneoForm((prev) => ({
-                          ...prev,
-                          titulo: e.target.value,
-                        }))
-                      }
-                      required
-                    />
-                  </label>
-
-                  <label className="pdc-tournament-field">
-                    <span>Deporte *</span>
-                    <select
-                      value={torneoForm.id_deporte}
-                      onChange={(e) =>
-                        setTorneoForm((prev) => ({
-                          ...prev,
-                          id_deporte: e.target.value,
-                        }))
-                      }
-                      required
-                    >
-                      <option value="">Seleccionar deporte</option>
-                      {deportesDisponibles.map((deporte) => (
-                        <option
-                          key={deporte.id_deporte}
-                          value={deporte.id_deporte}
-                        >
-                          {deporte.nombre_deporte}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="pdc-tournament-field">
-                    <span>Contacto</span>
-                    <input
-                      type="text"
-                      maxLength={180}
-                      placeholder="Teléfono, WhatsApp o email"
-                      value={torneoForm.contacto}
-                      onChange={(e) =>
-                        setTorneoForm((prev) => ({
-                          ...prev,
-                          contacto: e.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-
-                  <label className="pdc-tournament-field">
-                    <span>Fecha de inicio *</span>
-                    <input
-                      type="date"
-                      min={fechaMinimaBloqueo}
-                      value={torneoForm.fecha_inicio}
-                      onChange={(e) =>
-                        setTorneoForm((prev) => ({
-                          ...prev,
-                          fecha_inicio: e.target.value,
-                          fecha_fin:
-                            prev.fecha_fin &&
-                            prev.fecha_fin < e.target.value
-                              ? e.target.value
-                              : prev.fecha_fin,
-                        }))
-                      }
-                      required
-                    />
-                  </label>
-
-                  <label className="pdc-tournament-field">
-                    <span>Fecha de finalización *</span>
-                    <input
-                      type="date"
-                      min={torneoForm.fecha_inicio || fechaMinimaBloqueo}
-                      value={torneoForm.fecha_fin}
-                      onChange={(e) =>
-                        setTorneoForm((prev) => ({
-                          ...prev,
-                          fecha_fin: e.target.value,
-                        }))
-                      }
-                      required
-                    />
-                  </label>
-
-                  <label className="pdc-tournament-field pdc-tournament-field--wide">
-                    <span>Descripción *</span>
-                    <textarea
-                      minLength={10}
-                      rows={5}
-                      placeholder="Contá cómo se juega, categorías, premios, inscripción y toda la información importante."
-                      value={torneoForm.descripcion}
-                      onChange={(e) =>
-                        setTorneoForm((prev) => ({
-                          ...prev,
-                          descripcion: e.target.value,
-                        }))
-                      }
-                      required
-                    />
-                  </label>
-
-                  <div className="pdc-tournament-field pdc-tournament-field--wide">
-                    <span>Flyer {torneoEditandoId ? '(opcional al editar)' : '*'}</span>
-
-                    <div className="pdc-tournament-flyer-control">
-                      <input
-                        ref={flyerInputRef}
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        onChange={handleFlyerTorneoChange}
-                        className="pdc-tournament-file-input"
-                      />
-
-                      <button
-                        type="button"
-                        className="pdc-tournament-file-button"
-                        onClick={() => flyerInputRef.current?.click()}
-                      >
-                        <i className="bi bi-image"></i>
-                        {flyerTorneo
-                          ? 'Cambiar flyer'
-                          : torneoEditandoId
-                            ? 'Reemplazar flyer'
-                            : 'Seleccionar flyer'}
-                      </button>
-
-                      <small>JPG, PNG o WEBP. Máximo 5 MB.</small>
-                    </div>
-
-                    {flyerPreview && (
-                      <div className="pdc-tournament-flyer-preview">
-                        <img
-                          src={flyerPreview}
-                          alt="Vista previa del flyer del torneo"
-                        />
-                        <div>
-                          <strong>
-                            {flyerTorneo?.name || 'Flyer actual del torneo'}
-                          </strong>
-                          <span>
-                            {flyerTorneo
-                              ? 'La imagen nueva se subirá al guardar.'
-                              : 'Podés conservar este flyer o reemplazarlo.'}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="pdc-tournament-form-actions">
-                  <button
-                    type="button"
-                    className="pdc-tournament-secondary-button"
-                    onClick={cerrarFormularioTorneo}
-                    disabled={guardandoTorneo}
-                  >
-                    Cancelar
-                  </button>
+              {/* Panel de próximas reservas */}
+              <div className="pdc-panel pdc-upcoming-reservations-panel">
+                <div className="pdc-panel-header">
+                  <h3>Próximas reservas</h3>
 
                   <button
-                    type="button"
-                    className="pdc-tournament-draft-button"
-                    onClick={() => guardarTorneo('borrador')}
-                    disabled={guardandoTorneo}
+                    className="pdc-light-button"
+                    onClick={() => setShowCalendar(!showCalendar)}
                   >
-                    <i className="bi bi-file-earmark"></i>
-                    {guardandoTorneo ? 'Guardando...' : 'Guardar borrador'}
-                  </button>
-
-                  <button
-                    type="button"
-                    className="pdc-tournament-publish-button"
-                    onClick={() => guardarTorneo('publicado')}
-                    disabled={guardandoTorneo}
-                  >
-                    <i className="bi bi-megaphone"></i>
-                    {guardandoTorneo ? 'Guardando...' : 'Publicar torneo'}
+                    {showCalendar ? 'Ocultar calendario' : 'Ver calendario'}
+                    <i className="bi bi-calendar-event"></i>
                   </button>
                 </div>
-              </form>
-            )}
 
-            <div className="pdc-tournaments-list-heading">
-              <div>
-                <strong>Torneos del club</strong>
-                <span>{torneos.length} publicación{torneos.length === 1 ? '' : 'es'}</span>
-              </div>
+                {reservasProximas.length === 0 ? (
+                  <p className="pdc-alert pdc-alert-info">No hay próximas reservas.</p>
+                ) : (
+                  <div className="pdc-upcoming-reservations-list">
+                    {reservasProximas.map((reserva, index) => (
+                      <div className="pdc-reservation-row" key={obtenerIdReserva(reserva) || index}>
+                        <span>{reserva.hora}</span>
 
-              <button
-                type="button"
-                className="pdc-tournaments-refresh"
-                onClick={cargarTorneosClub}
-                disabled={cargandoTorneos}
-                title="Actualizar torneos"
-              >
-                <i className={`bi bi-arrow-clockwise ${cargandoTorneos ? 'is-spinning' : ''}`}></i>
-              </button>
-            </div>
+                        <div className="pdc-reservation-info">
+                          <strong>{reserva.deporte}</strong>
+                          <p>{formatearFecha(reserva.fecha)} · {reserva.cancha}</p>
 
-            {cargandoTorneos ? (
-              <div className="pdc-tournaments-loading">
-                <span className="pdc-tournaments-spinner"></span>
-                Cargando torneos...
-              </div>
-            ) : torneos.length === 0 ? (
-              <div className="pdc-tournaments-empty">
-                <div className="pdc-tournaments-empty-icon" aria-hidden="true">
-                  <i className="bi bi-trophy"></i>
-                </div>
+                          <div className="pdc-reservation-client">
+                            <span>
+                              <i className="bi bi-person-fill"></i>
+                              {reserva.cliente_nombre || 'Usuario'}
+                            </span>
 
-                <div>
-                  <strong>Todavía no hay torneos creados</strong>
-                  <p>
-                    Creá el primero y decidí si querés guardarlo como borrador
-                    o publicarlo inmediatamente.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="pdc-tournaments-list">
-                {torneos.map((torneo) => {
-                  const actualizando =
-                    actualizandoEstadoTorneoId === torneo.id_torneo;
-                  const estado = torneo.estado || 'borrador';
+                            {reserva.cliente_telefono && (
+                              <a href={`tel:${reserva.cliente_telefono}`}>
+                                <i className="bi bi-telephone-fill"></i>
+                                {reserva.cliente_telefono}
+                              </a>
+                            )}
 
-                  return (
-                    <article
-                      className="pdc-tournament-card"
-                      key={torneo.id_torneo}
-                    >
-                      <div className="pdc-tournament-card-flyer">
-                        {torneo.flyer_url ? (
-                          <img
-                            src={construirUrlFlyer(torneo.flyer_url)}
-                            alt={`Flyer de ${torneo.titulo}`}
-                          />
-                        ) : (
-                          <i className="bi bi-image"></i>
-                        )}
-                      </div>
-
-                      <div className="pdc-tournament-card-content">
-                        <div className="pdc-tournament-card-title-row">
-                          <div>
-                            <span>{obtenerNombreDeporteTorneo(torneo)}</span>
-                            <h4>{torneo.titulo}</h4>
+                            {obtenerCancelacionesUsuario(reserva) > 0 && (
+                              <small
+                                className={`pdc-cancellation-count ${obtenerCancelacionesUsuario(reserva) >= 2 ? 'is-warning' : ''
+                                  }`}
+                                title="Cancelaciones registradas por este usuario en tu club"
+                              >
+                                {obtenerCancelacionesUsuario(reserva)} {
+                                  obtenerCancelacionesUsuario(reserva) === 1
+                                    ? 'cancelación previa'
+                                    : 'cancelaciones previas'
+                                }
+                              </small>
+                            )}
                           </div>
-
-                          <span
-                            className={`pdc-tournament-status pdc-tournament-status--${estado}`}
-                          >
-                            {estado}
-                          </span>
                         </div>
 
-                        <p className="pdc-tournament-card-dates">
-                          <i className="bi bi-calendar-event"></i>
-                          {formatearFechaBloqueo(torneo.fecha_inicio)}
-                          {' · '}
-                          {formatearFechaBloqueo(torneo.fecha_fin)}
-                        </p>
-
-                        {torneo.contacto && (
-                          <p className="pdc-tournament-card-contact">
-                            <i className="bi bi-whatsapp"></i>
-                            {torneo.contacto}
-                          </p>
-                        )}
-
-                        <p className="pdc-tournament-card-description">
-                          {torneo.descripcion}
-                        </p>
-
-                        <div className="pdc-tournament-card-actions">
-                          {estado !== 'cancelado' && (
-                            <button
-                              type="button"
-                              className="pdc-tournament-action pdc-tournament-action--edit"
-                              onClick={() => iniciarEdicionTorneo(torneo)}
-                              disabled={actualizando}
-                              title="Editar torneo"
-                            >
-                              <i className="bi bi-pencil"></i>
-                              Editar
-                            </button>
-                          )}
-
-                          {estado === 'borrador' && (
-                            <button
-                              type="button"
-                              className="pdc-tournament-action pdc-tournament-action--publish"
-                              onClick={() =>
-                                cambiarEstadoTorneo(torneo, 'publicado')
-                              }
-                              disabled={actualizando}
-                            >
-                              <i className="bi bi-megaphone"></i>
-                              Publicar
-                            </button>
-                          )}
-
-                          {estado === 'publicado' && (
-                            <button
-                              type="button"
-                              className="pdc-tournament-action pdc-tournament-action--finish"
-                              onClick={() =>
-                                cambiarEstadoTorneo(torneo, 'finalizado')
-                              }
-                              disabled={actualizando}
-                            >
-                              <i className="bi bi-flag"></i>
-                              Finalizar
-                            </button>
-                          )}
-
-                          {estado === 'finalizado' && (
-                            <button
-                              type="button"
-                              className="pdc-tournament-action pdc-tournament-action--draft"
-                              onClick={() =>
-                                cambiarEstadoTorneo(torneo, 'borrador')
-                              }
-                              disabled={actualizando}
-                            >
-                              <i className="bi bi-arrow-counterclockwise"></i>
-                              Reabrir
-                            </button>
-                          )}
-
-                          {estado !== 'cancelado' && (
-                            <button
-                              type="button"
-                              className="pdc-tournament-action pdc-tournament-action--cancel"
-                              onClick={() => cancelarTorneo(torneo)}
-                              disabled={actualizando}
-                            >
-                              <i className="bi bi-x-octagon"></i>
-                              Cancelar
-                            </button>
-                          )}
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'flex-end',
+                            gap: '8px',
+                          }}
+                        >
+                          <small className="pdc-confirmed">
+                            {reserva.estado || 'Confirmada'}
+                          </small>
 
                           <button
                             type="button"
-                            className="pdc-tournament-action pdc-tournament-action--cancel"
-                            onClick={() => eliminarTorneo(torneo)}
-                            disabled={actualizando}
-                            title="Eliminar torneo definitivamente"
+                            className="pdc-cancel-reservation"
+                            onClick={() => handleCancelarReservaClub(reserva)}
+                            disabled={
+                              cancelandoReservaId === String(obtenerIdReserva(reserva))
+                            }
+                            title="Cancelar esta reserva"
                           >
-                            <i className="bi bi-trash3"></i>
-                            Eliminar
+                            {cancelandoReservaId === String(obtenerIdReserva(reserva))
+                              ? 'Cancelando...'
+                              : 'Cancelar'}
                           </button>
-
-                          {actualizando && (
-                            <span className="pdc-tournament-updating">
-                              Actualizando...
-                            </span>
-                          )}
                         </div>
                       </div>
-                    </article>
-                  );
-                })}
+                    ))}
+                  </div>
+                )}
+
+                {/* Calendario simple desplegable */}
+                {showCalendar && (
+                  <div className="pdc-calendar-preview">
+                    <h4>Calendario de reservas</h4>
+
+                    {reservasProximas.length === 0 ? (
+                      <p>No hay reservas cargadas en el calendario.</p>
+                    ) : (
+                      reservasProximas.map((reserva, index) => (
+                        <div className="pdc-calendar-preview-item" key={obtenerIdReserva(reserva) || index}>
+                          <div>
+                            <strong>{formatearFecha(reserva.fecha)}</strong>
+                            <span>{reserva.hora}</span>
+                          </div>
+
+                          <div className="pdc-calendar-reservation-detail">
+                            <p>{reserva.deporte}</p>
+                            <small>{reserva.cliente_nombre || 'Usuario'}</small>
+                            {reserva.cliente_telefono && (
+                              <a href={`tel:${reserva.cliente_telefono}`}>{reserva.cliente_telefono}</a>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </section>
 
-          <div className="pdc-panel pdc-club-logo-panel">
-            <h3>Logo del club</h3>
+            {/* CARTELERA DEL CLUB */}
+            <section className="pdc-panel pdc-announcements-panel">
+              <div className="pdc-announcements-header">
+                <div>
+                  <span className="pdc-announcements-kicker">COMUNICACIÓN</span>
+                  <h3>Cartelera del club</h3>
+                  <p>
+                    Publicá novedades, escuelitas, promociones o cualquier información
+                    que quieras mostrarle a los usuarios de DameCancha.
+                  </p>
+                </div>
 
-            <div className="pdc-club-logo-content">
-              {logoClubUrl ? (
-                <img
-                  src={logoClubUrl}
-                  alt={`Logo de ${nombreClub}`}
-                  className="pdc-club-logo-img"
-                />
+                <button
+                  type="button"
+                  className="pdc-create-announcement-button"
+                  onClick={
+                    showAnuncioForm
+                      ? cerrarFormularioAnuncio
+                      : abrirFormularioNuevoAnuncio
+                  }
+                >
+                  <i
+                    className={
+                      showAnuncioForm
+                        ? 'bi bi-x-circle'
+                        : 'bi bi-pin-angle-fill'
+                    }
+                  ></i>
+                  {showAnuncioForm ? 'Cerrar formulario' : 'Crear anuncio'}
+                </button>
+              </div>
+
+              {showAnuncioForm && (
+                <form
+                  className="pdc-announcement-form"
+                  onSubmit={guardarAnuncioClub}
+                >
+                  <div className="pdc-announcement-form-heading">
+                    <div>
+                      <span>
+                        {anuncioEditandoId
+                          ? 'EDITANDO ANUNCIO'
+                          : 'NUEVA PUBLICACIÓN'}
+                      </span>
+                      <h4>
+                        {anuncioEditandoId
+                          ? 'Actualizá tu publicación'
+                          : 'Escribí lo que querés comunicar'}
+                      </h4>
+                    </div>
+
+                    {anuncioEditandoId && (
+                      <button
+                        type="button"
+                        className="pdc-announcement-form-reset"
+                        onClick={abrirFormularioNuevoAnuncio}
+                      >
+                        <i className="bi bi-plus-lg"></i>
+                        Crear otro
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="pdc-announcement-form-grid">
+                    <label className="pdc-announcement-field">
+                      <span>Título (opcional)</span>
+                      <input
+                        type="text"
+                        maxLength={120}
+                        placeholder="Ej: Escuelita de Pádel"
+                        value={anuncioForm.titulo}
+                        onChange={(e) =>
+                          setAnuncioForm((prev) => ({
+                            ...prev,
+                            titulo: e.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+
+                    <label className="pdc-announcement-field pdc-announcement-field--wide">
+                      <span>Mensaje *</span>
+                      <textarea
+                        rows={6}
+                        minLength={3}
+                        maxLength={5000}
+                        placeholder="Contá horarios, edades, promociones, contacto o cualquier información que quieras publicar."
+                        value={anuncioForm.contenido}
+                        onChange={(e) =>
+                          setAnuncioForm((prev) => ({
+                            ...prev,
+                            contenido: e.target.value,
+                          }))
+                        }
+                        required
+                      />
+                      <small>
+                        {anuncioForm.contenido.length}/5000 caracteres
+                      </small>
+                    </label>
+
+                    <div className="pdc-announcement-field pdc-announcement-field--wide">
+                      <span>Flyer o foto (opcional)</span>
+
+                      <div className="pdc-announcement-image-control">
+                        <input
+                          ref={anuncioImagenInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          onChange={handleImagenAnuncioChange}
+                          className="pdc-announcement-file-input"
+                        />
+
+                        <button
+                          type="button"
+                          className="pdc-announcement-file-button"
+                          onClick={() =>
+                            anuncioImagenInputRef.current?.click()
+                          }
+                        >
+                          <i className="bi bi-image"></i>
+                          {imagenAnuncioClub
+                            ? 'Cambiar imagen'
+                            : anuncioEditandoId
+                              ? 'Reemplazar imagen'
+                              : 'Agregar imagen'}
+                        </button>
+
+                        <small>JPG, PNG o WEBP. Máximo 5 MB.</small>
+                      </div>
+
+                      {imagenAnuncioPreview && (
+                        <div className="pdc-announcement-image-preview">
+                          <img
+                            src={imagenAnuncioPreview}
+                            alt="Vista previa del anuncio"
+                          />
+                          <div>
+                            <strong>
+                              {imagenAnuncioClub?.name ||
+                                'Imagen actual del anuncio'}
+                            </strong>
+                            <span>
+                              {imagenAnuncioClub
+                                ? 'La nueva imagen se subirá al guardar.'
+                                : 'Podés conservar esta imagen o reemplazarla.'}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pdc-announcement-form-actions">
+                    <button
+                      type="button"
+                      className="pdc-announcement-secondary-button"
+                      onClick={cerrarFormularioAnuncio}
+                      disabled={guardandoAnuncioClub}
+                    >
+                      Cancelar
+                    </button>
+
+                    <button
+                      type="submit"
+                      className="pdc-announcement-publish-button"
+                      disabled={guardandoAnuncioClub}
+                    >
+                      <i className="bi bi-megaphone-fill"></i>
+                      {guardandoAnuncioClub
+                        ? 'Guardando...'
+                        : anuncioEditandoId
+                          ? 'Guardar cambios'
+                          : 'Publicar anuncio'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              <div className="pdc-announcements-list-heading">
+                <div>
+                  <strong>Publicaciones de cartelera</strong>
+                  <span>
+                    {anunciosClub.length} anuncio
+                    {anunciosClub.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  className="pdc-announcements-refresh"
+                  onClick={cargarAnunciosClub}
+                  disabled={cargandoAnunciosClub}
+                  title="Actualizar cartelera"
+                >
+                  <i
+                    className={`bi bi-arrow-clockwise ${cargandoAnunciosClub ? 'is-spinning' : ''
+                      }`}
+                  ></i>
+                </button>
+              </div>
+
+              {cargandoAnunciosClub ? (
+                <div className="pdc-announcements-loading">
+                  <span className="pdc-announcements-spinner"></span>
+                  Cargando cartelera...
+                </div>
+              ) : anunciosClub.length === 0 ? (
+                <div className="pdc-announcements-empty">
+                  <div
+                    className="pdc-announcements-empty-icon"
+                    aria-hidden="true"
+                  >
+                    <i className="bi bi-pin-angle"></i>
+                  </div>
+
+                  <div>
+                    <strong>Tu cartelera está vacía</strong>
+                    <p>
+                      Creá un anuncio para promocionar actividades, clases,
+                      novedades o propuestas del club.
+                    </p>
+                  </div>
+                </div>
               ) : (
-                <div className="pdc-club-logo-initials">
-                  {inicialesClub || 'CY'}
+                <div className="pdc-announcements-list">
+                  {anunciosClub.map((anuncio) => {
+                    const actualizando =
+                      actualizandoAnuncioClubId === anuncio.id_anuncio;
+                    const imagenUrl = construirUrlImagenAnuncio(
+                      anuncio.imagen_url
+                    );
+
+                    return (
+                      <article
+                        className="pdc-announcement-card"
+                        key={anuncio.id_anuncio}
+                      >
+                        {imagenUrl ? (
+                          <div className="pdc-announcement-card__image">
+                            <img
+                              src={imagenUrl}
+                              alt={
+                                anuncio.titulo
+                                  ? `Imagen de ${anuncio.titulo}`
+                                  : 'Imagen del anuncio'
+                              }
+                            />
+                          </div>
+                        ) : (
+                          <div className="pdc-announcement-card__image pdc-announcement-card__image--empty">
+                            <i className="bi bi-megaphone"></i>
+                          </div>
+                        )}
+
+                        <div className="pdc-announcement-card__body">
+                          <div className="pdc-announcement-card__top">
+                            <span
+                              className={`pdc-announcement-status ${anuncio.activo ? 'is-active' : 'is-hidden'
+                                }`}
+                            >
+                              {anuncio.activo ? 'Publicado' : 'Oculto'}
+                            </span>
+
+                            <small>
+                              {anuncio.created_at
+                                ? new Date(
+                                  anuncio.created_at
+                                ).toLocaleDateString('es-AR')
+                                : ''}
+                            </small>
+                          </div>
+
+                          <h4>
+                            {anuncio.titulo || 'Anuncio del club'}
+                          </h4>
+
+                          <p>{anuncio.contenido}</p>
+
+                          <div className="pdc-announcement-card__actions">
+                            <button
+                              type="button"
+                              className="pdc-announcement-action pdc-announcement-action--edit"
+                              onClick={() =>
+                                iniciarEdicionAnuncio(anuncio)
+                              }
+                              disabled={actualizando}
+                            >
+                              <i className="bi bi-pencil-square"></i>
+                              Editar
+                            </button>
+
+                            <button
+                              type="button"
+                              className="pdc-announcement-action pdc-announcement-action--state"
+                              onClick={() =>
+                                cambiarEstadoAnuncio(anuncio)
+                              }
+                              disabled={actualizando}
+                            >
+                              <i
+                                className={
+                                  anuncio.activo
+                                    ? 'bi bi-eye-slash'
+                                    : 'bi bi-eye'
+                                }
+                              ></i>
+                              {anuncio.activo ? 'Ocultar' : 'Publicar'}
+                            </button>
+
+                            <button
+                              type="button"
+                              className="pdc-announcement-action pdc-announcement-action--delete"
+                              onClick={() =>
+                                eliminarAnuncioClub(anuncio)
+                              }
+                              disabled={actualizando}
+                            >
+                              <i className="bi bi-trash3"></i>
+                              Eliminar
+                            </button>
+
+                            {actualizando && (
+                              <span className="pdc-announcement-updating">
+                                Actualizando...
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
                 </div>
               )}
-            </div>
-          </div>
+            </section>
+
+            {/* GRILLA INFERIOR: TORNEOS + LOGO */}
+            <section className="pdc-bottom-grid">
+              <div className="pdc-panel pdc-tournaments-panel">
+                <div className="pdc-tournaments-header">
+                  <div>
+                    <span className="pdc-tournaments-kicker">GESTIÓN DEL CLUB</span>
+                    <h3>Torneos</h3>
+                    <p>
+                      Creá la publicación, cargá el flyer y administrá su estado
+                      sin salir del panel.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="pdc-create-tournament-button"
+                    onClick={
+                      showTournamentForm
+                        ? cerrarFormularioTorneo
+                        : abrirFormularioNuevoTorneo
+                    }
+                  >
+                    <i
+                      className={
+                        showTournamentForm
+                          ? 'bi bi-x-circle'
+                          : 'bi bi-plus-circle'
+                      }
+                    ></i>
+                    {showTournamentForm ? 'Cerrar formulario' : 'Crear torneo'}
+                  </button>
+                </div>
+
+                {showTournamentForm && (
+                  <form
+                    className="pdc-tournament-form"
+                    onSubmit={handleSubmitTorneo}
+                  >
+                    <div className="pdc-tournament-form-heading">
+                      <div>
+                        <span>
+                          {torneoEditandoId ? 'EDITANDO PUBLICACIÓN' : 'NUEVO TORNEO'}
+                        </span>
+                        <h4>
+                          {torneoEditandoId
+                            ? 'Actualizá los datos del torneo'
+                            : 'Completá la información del torneo'}
+                        </h4>
+                      </div>
+
+                      {torneoEditandoId && (
+                        <button
+                          type="button"
+                          className="pdc-tournament-form-reset"
+                          onClick={abrirFormularioNuevoTorneo}
+                        >
+                          <i className="bi bi-plus-lg"></i>
+                          Crear otro
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="pdc-tournament-form-grid">
+                      <label className="pdc-tournament-field pdc-tournament-field--wide">
+                        <span>Título *</span>
+                        <input
+                          type="text"
+                          minLength={3}
+                          maxLength={180}
+                          placeholder="Ej: Copa de Verano Fútbol 7"
+                          value={torneoForm.titulo}
+                          onChange={(e) =>
+                            setTorneoForm((prev) => ({
+                              ...prev,
+                              titulo: e.target.value,
+                            }))
+                          }
+                          required
+                        />
+                      </label>
+
+                      <label className="pdc-tournament-field">
+                        <span>Deporte *</span>
+                        <select
+                          value={torneoForm.id_deporte}
+                          onChange={(e) =>
+                            setTorneoForm((prev) => ({
+                              ...prev,
+                              id_deporte: e.target.value,
+                            }))
+                          }
+                          required
+                        >
+                          <option value="">Seleccionar deporte</option>
+                          {deportesDisponibles.map((deporte) => (
+                            <option
+                              key={deporte.id_deporte}
+                              value={deporte.id_deporte}
+                            >
+                              {deporte.nombre_deporte}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="pdc-tournament-field">
+                        <span>Contacto</span>
+                        <input
+                          type="text"
+                          maxLength={180}
+                          placeholder="Teléfono, WhatsApp o email"
+                          value={torneoForm.contacto}
+                          onChange={(e) =>
+                            setTorneoForm((prev) => ({
+                              ...prev,
+                              contacto: e.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+
+                      <label className="pdc-tournament-field">
+                        <span>Fecha de inicio *</span>
+                        <input
+                          type="date"
+                          min={fechaMinimaBloqueo}
+                          value={torneoForm.fecha_inicio}
+                          onChange={(e) =>
+                            setTorneoForm((prev) => ({
+                              ...prev,
+                              fecha_inicio: e.target.value,
+                              fecha_fin:
+                                prev.fecha_fin &&
+                                  prev.fecha_fin < e.target.value
+                                  ? e.target.value
+                                  : prev.fecha_fin,
+                            }))
+                          }
+                          required
+                        />
+                      </label>
+
+                      <label className="pdc-tournament-field">
+                        <span>Fecha de finalización *</span>
+                        <input
+                          type="date"
+                          min={torneoForm.fecha_inicio || fechaMinimaBloqueo}
+                          value={torneoForm.fecha_fin}
+                          onChange={(e) =>
+                            setTorneoForm((prev) => ({
+                              ...prev,
+                              fecha_fin: e.target.value,
+                            }))
+                          }
+                          required
+                        />
+                      </label>
+
+                      <label className="pdc-tournament-field pdc-tournament-field--wide">
+                        <span>Descripción *</span>
+                        <textarea
+                          minLength={10}
+                          rows={5}
+                          placeholder="Contá cómo se juega, categorías, premios, inscripción y toda la información importante."
+                          value={torneoForm.descripcion}
+                          onChange={(e) =>
+                            setTorneoForm((prev) => ({
+                              ...prev,
+                              descripcion: e.target.value,
+                            }))
+                          }
+                          required
+                        />
+                      </label>
+
+                      <div className="pdc-tournament-field pdc-tournament-field--wide">
+                        <span>Flyer {torneoEditandoId ? '(opcional al editar)' : '*'}</span>
+
+                        <div className="pdc-tournament-flyer-control">
+                          <input
+                            ref={flyerInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            onChange={handleFlyerTorneoChange}
+                            className="pdc-tournament-file-input"
+                          />
+
+                          <button
+                            type="button"
+                            className="pdc-tournament-file-button"
+                            onClick={() => flyerInputRef.current?.click()}
+                          >
+                            <i className="bi bi-image"></i>
+                            {flyerTorneo
+                              ? 'Cambiar flyer'
+                              : torneoEditandoId
+                                ? 'Reemplazar flyer'
+                                : 'Seleccionar flyer'}
+                          </button>
+
+                          <small>JPG, PNG o WEBP. Máximo 5 MB.</small>
+                        </div>
+
+                        {flyerPreview && (
+                          <div className="pdc-tournament-flyer-preview">
+                            <img
+                              src={flyerPreview}
+                              alt="Vista previa del flyer del torneo"
+                            />
+                            <div>
+                              <strong>
+                                {flyerTorneo?.name || 'Flyer actual del torneo'}
+                              </strong>
+                              <span>
+                                {flyerTorneo
+                                  ? 'La imagen nueva se subirá al guardar.'
+                                  : 'Podés conservar este flyer o reemplazarlo.'}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="pdc-tournament-form-actions">
+                      <button
+                        type="button"
+                        className="pdc-tournament-secondary-button"
+                        onClick={cerrarFormularioTorneo}
+                        disabled={guardandoTorneo}
+                      >
+                        Cancelar
+                      </button>
+
+                      <button
+                        type="button"
+                        className="pdc-tournament-draft-button"
+                        onClick={() => guardarTorneo('borrador')}
+                        disabled={guardandoTorneo}
+                      >
+                        <i className="bi bi-file-earmark"></i>
+                        {guardandoTorneo ? 'Guardando...' : 'Guardar borrador'}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="pdc-tournament-publish-button"
+                        onClick={() => guardarTorneo('publicado')}
+                        disabled={guardandoTorneo}
+                      >
+                        <i className="bi bi-megaphone"></i>
+                        {guardandoTorneo ? 'Guardando...' : 'Publicar torneo'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                <div className="pdc-tournaments-list-heading">
+                  <div>
+                    <strong>Torneos del club</strong>
+                    <span>{torneos.length} publicación{torneos.length === 1 ? '' : 'es'}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="pdc-tournaments-refresh"
+                    onClick={cargarTorneosClub}
+                    disabled={cargandoTorneos}
+                    title="Actualizar torneos"
+                  >
+                    <i className={`bi bi-arrow-clockwise ${cargandoTorneos ? 'is-spinning' : ''}`}></i>
+                  </button>
+                </div>
+
+                {cargandoTorneos ? (
+                  <div className="pdc-tournaments-loading">
+                    <span className="pdc-tournaments-spinner"></span>
+                    Cargando torneos...
+                  </div>
+                ) : torneos.length === 0 ? (
+                  <div className="pdc-tournaments-empty">
+                    <div className="pdc-tournaments-empty-icon" aria-hidden="true">
+                      <i className="bi bi-trophy"></i>
+                    </div>
+
+                    <div>
+                      <strong>Todavía no hay torneos creados</strong>
+                      <p>
+                        Creá el primero y decidí si querés guardarlo como borrador
+                        o publicarlo inmediatamente.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="pdc-tournaments-list">
+                    {torneos.map((torneo) => {
+                      const actualizando =
+                        actualizandoEstadoTorneoId === torneo.id_torneo;
+                      const estado = torneo.estado || 'borrador';
+
+                      return (
+                        <article
+                          className="pdc-tournament-card"
+                          key={torneo.id_torneo}
+                        >
+                          <div className="pdc-tournament-card-flyer">
+                            {torneo.flyer_url ? (
+                              <img
+                                src={construirUrlFlyer(torneo.flyer_url)}
+                                alt={`Flyer de ${torneo.titulo}`}
+                              />
+                            ) : (
+                              <i className="bi bi-image"></i>
+                            )}
+                          </div>
+
+                          <div className="pdc-tournament-card-content">
+                            <div className="pdc-tournament-card-title-row">
+                              <div>
+                                <span>{obtenerNombreDeporteTorneo(torneo)}</span>
+                                <h4>{torneo.titulo}</h4>
+                              </div>
+
+                              <span
+                                className={`pdc-tournament-status pdc-tournament-status--${estado}`}
+                              >
+                                {estado}
+                              </span>
+                            </div>
+
+                            <p className="pdc-tournament-card-dates">
+                              <i className="bi bi-calendar-event"></i>
+                              {formatearFechaBloqueo(torneo.fecha_inicio)}
+                              {' · '}
+                              {formatearFechaBloqueo(torneo.fecha_fin)}
+                            </p>
+
+                            {torneo.contacto && (
+                              <p className="pdc-tournament-card-contact">
+                                <i className="bi bi-whatsapp"></i>
+                                {torneo.contacto}
+                              </p>
+                            )}
+
+                            <p className="pdc-tournament-card-description">
+                              {torneo.descripcion}
+                            </p>
+
+                            <div className="pdc-tournament-card-actions">
+                              {estado !== 'cancelado' && (
+                                <button
+                                  type="button"
+                                  className="pdc-tournament-action pdc-tournament-action--edit"
+                                  onClick={() => iniciarEdicionTorneo(torneo)}
+                                  disabled={actualizando}
+                                  title="Editar torneo"
+                                >
+                                  <i className="bi bi-pencil"></i>
+                                  Editar
+                                </button>
+                              )}
+
+                              {estado === 'borrador' && (
+                                <button
+                                  type="button"
+                                  className="pdc-tournament-action pdc-tournament-action--publish"
+                                  onClick={() =>
+                                    cambiarEstadoTorneo(torneo, 'publicado')
+                                  }
+                                  disabled={actualizando}
+                                >
+                                  <i className="bi bi-megaphone"></i>
+                                  Publicar
+                                </button>
+                              )}
+
+                              {estado === 'publicado' && (
+                                <button
+                                  type="button"
+                                  className="pdc-tournament-action pdc-tournament-action--finish"
+                                  onClick={() =>
+                                    cambiarEstadoTorneo(torneo, 'finalizado')
+                                  }
+                                  disabled={actualizando}
+                                >
+                                  <i className="bi bi-flag"></i>
+                                  Finalizar
+                                </button>
+                              )}
+
+                              {estado === 'finalizado' && (
+                                <button
+                                  type="button"
+                                  className="pdc-tournament-action pdc-tournament-action--draft"
+                                  onClick={() =>
+                                    cambiarEstadoTorneo(torneo, 'borrador')
+                                  }
+                                  disabled={actualizando}
+                                >
+                                  <i className="bi bi-arrow-counterclockwise"></i>
+                                  Reabrir
+                                </button>
+                              )}
+
+                              {estado !== 'cancelado' && (
+                                <button
+                                  type="button"
+                                  className="pdc-tournament-action pdc-tournament-action--cancel"
+                                  onClick={() => cancelarTorneo(torneo)}
+                                  disabled={actualizando}
+                                >
+                                  <i className="bi bi-x-octagon"></i>
+                                  Cancelar
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                className="pdc-tournament-action pdc-tournament-action--cancel"
+                                onClick={() => eliminarTorneo(torneo)}
+                                disabled={actualizando}
+                                title="Eliminar torneo definitivamente"
+                              >
+                                <i className="bi bi-trash3"></i>
+                                Eliminar
+                              </button>
+
+                              {actualizando && (
+                                <span className="pdc-tournament-updating">
+                                  Actualizando...
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="pdc-panel pdc-club-logo-panel">
+                <h3>Logo del club</h3>
+
+                <div className="pdc-club-logo-content">
+                  {logoClubUrl ? (
+                    <img
+                      src={logoClubUrl}
+                      alt={`Logo de ${nombreClub}`}
+                      className="pdc-club-logo-img"
+                    />
+                  ) : (
+                    <div className="pdc-club-logo-initials">
+                      {inicialesClub || 'CY'}
+                    </div>
+                  )}
+                </div>
+              </div>
             </section>
           </>
         )}

@@ -210,13 +210,13 @@ const crearFechaHoraDesdeReserva = (fechaTexto, horaTexto) => {
 
 /*
   Cantidad mínima de horas necesarias para poder gestionar una reserva.
-  Si faltan 24 horas o menos para el turno, no se permite modificar ni eliminar.
+  Si faltan menos de 2 horas para el turno, no se permite modificar ni cancelar.
 */
-const HORAS_MINIMAS_PARA_GESTIONAR = 24;
+const HORAS_MINIMAS_PARA_GESTIONAR = 2;
 
 /*
   Indica si una reserva todavía puede modificarse o eliminarse.
-  La regla funcional es: solo se puede gestionar si faltan más de 24 horas.
+  La regla funcional es: se puede gestionar si faltan al menos 2 horas.
 */
 const puedeGestionarPorAnticipacion = (fechaHoraDate) => {
   if (!(fechaHoraDate instanceof Date) || Number.isNaN(fechaHoraDate.getTime())) {
@@ -227,7 +227,7 @@ const puedeGestionarPorAnticipacion = (fechaHoraDate) => {
   const diferenciaEnMs = fechaHoraDate.getTime() - ahora.getTime();
   const horasRestantes = diferenciaEnMs / (1000 * 60 * 60);
 
-  return horasRestantes > HORAS_MINIMAS_PARA_GESTIONAR;
+  return horasRestantes >= HORAS_MINIMAS_PARA_GESTIONAR;
 };
 
 /*
@@ -580,7 +580,7 @@ const normalizarReserva = (reserva, listaClubes = []) => {
     puedeGestionar:
       fechaHoraDate ? puedeGestionarCalculado : (reserva.puedeGestionar ?? false),
     limite:
-      reserva.limite || '24 hs antes del turno',
+      reserva.limite || '2 hs antes del turno',
     direccion:
       reserva.direccion || clubEncontrado?.direccion || '',
     ciudad:
@@ -678,6 +678,14 @@ function DashboardUsuario({
   const [torneosPublicados, setTorneosPublicados] = useState([]);
   const [cargandoTorneos, setCargandoTorneos] = useState(false);
   const [torneoSeleccionado, setTorneoSeleccionado] = useState(null);
+
+  /*
+    Cartelera pública de los clubes.
+    Solo llegan anuncios activos de clubes activos.
+  */
+  const [anunciosActivos, setAnunciosActivos] = useState([]);
+  const [carteleraSeleccionada, setCarteleraSeleccionada] = useState(null);
+
   const canchasPasoDosRef = useRef(null);
   const [serviciosAbiertosPorCancha, setServiciosAbiertosPorCancha] = useState({});
 
@@ -721,6 +729,72 @@ function DashboardUsuario({
 
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const cargarAnunciosActivos = async () => {
+      try {
+        const response = await fetch(
+          apiUrl('/anuncio-club/activos'),
+          {
+            signal: controller.signal,
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `No se pudo cargar la cartelera. Error HTTP ${response.status}.`
+          );
+        }
+
+        const data = await response.json();
+        setAnunciosActivos(Array.isArray(data) ? data : []);
+      } catch (error) {
+        if (error?.name !== 'AbortError') {
+          console.error('Error al cargar anuncios activos:', error);
+          setAnunciosActivos([]);
+        }
+      }
+    };
+
+    cargarAnunciosActivos();
+
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (!carteleraSeleccionada) return undefined;
+
+    const overflowAnterior = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const cerrarConEscape = (event) => {
+      if (event.key === 'Escape') {
+        setCarteleraSeleccionada(null);
+      }
+    };
+
+    window.addEventListener('keydown', cerrarConEscape);
+
+    return () => {
+      window.removeEventListener('keydown', cerrarConEscape);
+      document.body.style.overflow = overflowAnterior;
+    };
+  }, [carteleraSeleccionada]);
+
+  const construirUrlImagenAnuncio = (imagenUrl) => {
+    if (!imagenUrl) return '';
+
+    if (
+      imagenUrl.startsWith('http://') ||
+      imagenUrl.startsWith('https://')
+    ) {
+      return imagenUrl;
+    }
+
+    return mediaUrl(imagenUrl);
+  };
 
   /*
     Horarios disponibles reales de la cancha seleccionada.
@@ -1126,6 +1200,26 @@ function DashboardUsuario({
     );
   }, [clubesActivos, deporteSeleccionado]);
 
+
+  const anunciosPorClub = useMemo(() => {
+    const agrupados = new Map();
+
+    anunciosActivos.forEach((anuncio) => {
+      const idClub =
+        anuncio?.club?.id_club ??
+        anuncio?.club?.id ??
+        anuncio?.id_club ??
+        null;
+
+      if (!idClub) return;
+
+      const clave = String(idClub);
+      const actuales = agrupados.get(clave) || [];
+      agrupados.set(clave, [...actuales, anuncio]);
+    });
+
+    return agrupados;
+  }, [anunciosActivos]);
 
   /*
     Solo muestra torneos publicados, vigentes y del deporte seleccionado.
@@ -1708,7 +1802,7 @@ function DashboardUsuario({
 
   /*
     Carga una reserva existente dentro del wizard para modificarla.
-    La reserva solo puede editarse si faltan más de 24 horas para el turno.
+    La reserva solo puede editarse si faltan al menos 2 horas para el turno.
   */
   const iniciarModificacionReserva = (reserva) => {
     if (!reserva.puedeGestionar) return;
@@ -1740,7 +1834,7 @@ function DashboardUsuario({
   /*
     Elimina o cancela una reserva existente.
     Antes de borrar muestra una confirmación visual con SweetAlert2.
-    Solo se permite cancelar si faltan más de 24 horas para el turno.
+    Solo se permite cancelar si faltan al menos 2 horas para el turno.
   */
   const eliminarReserva = async (reserva) => {
     const reservaPasada = esReservaPasada(reserva);
@@ -1748,7 +1842,7 @@ function DashboardUsuario({
     if (!reserva.puedeGestionar && !reservaPasada) {
       mostrarError(
         'No se puede cancelar',
-        'Las reservas solo pueden cancelarse o modificarse con más de 24 horas de anticipación.'
+        'Las reservas solo pueden cancelarse o modificarse con al menos 2 horas de anticipación.'
       );
       return;
     }
@@ -2013,7 +2107,7 @@ function DashboardUsuario({
         puedeGestionar: puedeGestionarPorAnticipacion(
           crearFechaHoraDesdeReserva(fechaSeleccionada, horarioSeleccionado)
         ),
-        limite: '24 hs antes del turno',
+        limite: '2 hs antes del turno',
         direccion: clubActual?.direccion || '',
         ciudad: clubActual?.ciudad || '',
         provincia: clubActual?.provincia || '',
@@ -2533,6 +2627,8 @@ function DashboardUsuario({
                                   canchaSeleccionada?.id ??
                                   canchaSeleccionada?.id_cancha ??
                                   null;
+                                const anunciosCancha =
+                                  anunciosPorClub.get(String(cancha.clubId)) || [];
 
                                 return (
                                   <article
@@ -2600,6 +2696,27 @@ function DashboardUsuario({
                                           : 'Servicios a confirmar'}
                                       </span>
                                     </button>
+
+                                    {anunciosCancha.length > 0 && (
+                                      <button
+                                        type="button"
+                                        className="club-card__bulletin"
+                                        onClick={() =>
+                                          setCarteleraSeleccionada({
+                                            clubId: cancha.clubId,
+                                            clubNombre: cancha.clubNombre,
+                                            anuncios: anunciosCancha,
+                                          })
+                                        }
+                                      >
+                                        <i className="bi bi-pin-angle-fill"></i>
+                                        <span>
+                                          {anunciosCancha.length} anuncio
+                                          {anunciosCancha.length === 1 ? '' : 's'} en cartelera
+                                        </span>
+                                        <i className="bi bi-chevron-right"></i>
+                                      </button>
+                                    )}
 
                                     {serviciosAbiertos && (
                                       <div className="club-card__amenities">
@@ -2888,7 +3005,7 @@ function DashboardUsuario({
 
                 <div className="booking-warning">
                   ℹ️ Recordá: las cancelaciones o modificaciones deben realizarse
-                  con al menos 24 horas de anticipación.
+                  con al menos 2 horas de anticipación.
                 </div>
               </section>
 
@@ -2991,7 +3108,7 @@ function DashboardUsuario({
                                 Podés cancelar o modificar hasta {reserva.limite}
                               </small>
                             ) : (
-                              <small>Menos de 24hs de anticipación</small>
+                              <small>Menos de 2 hs de anticipación</small>
                             )}
 
                             <div className="reservation-card__menu">
@@ -3008,7 +3125,7 @@ function DashboardUsuario({
                                     ? 'Borrar del panel'
                                     : reserva.puedeGestionar
                                       ? 'Gestionar reserva'
-                                      : 'No se puede gestionar con menos de 24 horas'
+                                      : 'No se puede gestionar con menos de 2 horas'
                                 }
                               >
                                 ⋮
@@ -3067,7 +3184,7 @@ function DashboardUsuario({
               <div>
                 <span>🕒</span>
                 <strong>Cancelá o modificá</strong>
-                <small>Hasta 24 horas antes del turno</small>
+                <small>Hasta 2 horas antes del turno</small>
               </div>
 
               <div>
@@ -3079,6 +3196,96 @@ function DashboardUsuario({
           </section>
         </div>
       </div>
+
+      {carteleraSeleccionada && (
+        <div
+          className="bulletin-detail-overlay"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setCarteleraSeleccionada(null);
+            }
+          }}
+        >
+          <section
+            className="bulletin-detail-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bulletin-detail-title"
+          >
+            <button
+              type="button"
+              className="bulletin-detail-modal__close"
+              onClick={() => setCarteleraSeleccionada(null)}
+              aria-label="Cerrar cartelera"
+            >
+              <i className="bi bi-x-lg"></i>
+            </button>
+
+            <div className="bulletin-detail-modal__header">
+              <span>
+                <i className="bi bi-pin-angle-fill"></i>
+                CARTELERA DEL CLUB
+              </span>
+              <h2 id="bulletin-detail-title">
+                {carteleraSeleccionada.clubNombre}
+              </h2>
+              <p>
+                {carteleraSeleccionada.anuncios.length} anuncio
+                {carteleraSeleccionada.anuncios.length === 1 ? '' : 's'} publicado
+                {carteleraSeleccionada.anuncios.length === 1 ? '' : 's'}
+              </p>
+            </div>
+
+            <div className="bulletin-detail-modal__list">
+              {carteleraSeleccionada.anuncios.map((anuncio) => {
+                const imagenUrl = construirUrlImagenAnuncio(
+                  anuncio.imagen_url
+                );
+
+                return (
+                  <article
+                    className="bulletin-detail-card"
+                    key={anuncio.id_anuncio}
+                  >
+                    {imagenUrl && (
+                      <div className="bulletin-detail-card__image">
+                        <img
+                          src={imagenUrl}
+                          alt={
+                            anuncio.titulo
+                              ? `Flyer de ${anuncio.titulo}`
+                              : 'Flyer del anuncio'
+                          }
+                        />
+                      </div>
+                    )}
+
+                    <div className="bulletin-detail-card__content">
+                      <span className="bulletin-detail-card__badge">
+                        <i className="bi bi-megaphone-fill"></i>
+                        Anuncio
+                      </span>
+
+                      <h3>{anuncio.titulo || 'Novedad del club'}</h3>
+                      <p>{anuncio.contenido}</p>
+
+                      {anuncio.created_at && (
+                        <small>
+                          Publicado el{' '}
+                          {new Date(anuncio.created_at).toLocaleDateString(
+                            'es-AR'
+                          )}
+                        </small>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+      )}
 
       {torneoSeleccionado && (
         <div
