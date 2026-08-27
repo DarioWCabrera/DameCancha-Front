@@ -1,9 +1,9 @@
 import { apiUrl, mediaUrl } from '../../config/api';
 import React, { useEffect, useRef, useState } from 'react';
 import './PanelDelClub.css';
-import { horarios } from '../staticData';
 import Swal from 'sweetalert2';
 import funcionalidadEnProgreso from '../../assets/PROGRESS.png';
+import ResumenMensualClub from './ResumenMensualClub';
 
 const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
   /*
@@ -21,6 +21,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     Controla si se muestra o no la sección de configuración.
   */
   const [showSettings, setShowSettings] = useState(false);
+  const [showResumenMensual, setShowResumenMensual] = useState(false);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [noMostrarWelcome, setNoMostrarWelcome] = useState(false);
 
@@ -28,6 +29,20 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
   const [solicitandoBaja, setSolicitandoBaja] = useState(false);
   const [cancelandoReservaId, setCancelandoReservaId] = useState(null);
   const [reservasCanceladasLocal, setReservasCanceladasLocal] = useState([]);
+
+  /*
+    Gestión de turnos fijos.
+    En este primer bloque del Panel del Club mostramos:
+    - solicitudes pendientes para aprobar o rechazar;
+    - turnos fijos activos del club.
+
+    La carga manual de clientes históricos la agregamos en el bloque siguiente
+    para mantener los cambios separados y fáciles de probar.
+  */
+  const [solicitudesTurnosFijos, setSolicitudesTurnosFijos] = useState([]);
+  const [turnosFijosActivos, setTurnosFijosActivos] = useState([]);
+  const [cargandoTurnosFijos, setCargandoTurnosFijos] = useState(false);
+  const [procesandoTurnoFijoId, setProcesandoTurnoFijoId] = useState(null);
 
   const abrirModalSuscripcion = () => {
     setMostrarModalSuscripcion(true);
@@ -48,8 +63,14 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
   */
   const [showCalendar, setShowCalendar] = useState(false);
 
-  const horariosIniciales = horarios.map((h) => h.id);
-  const [horariosPorCancha, setHorariosPorCancha] = useState({});
+  const CONFIG_HORARIO_DEFAULT = {
+    duracion: 60,
+    horaInicio: '09:00',
+    ultimoTurno: '22:00',
+    dias: [0, 1, 2, 3, 4, 5, 6],
+  };
+
+  const [configHorariosPorCancha, setConfigHorariosPorCancha] = useState({});
   const [canchaEditandoId, setCanchaEditandoId] = useState(null);
   const [canchaHorariosId, setCanchaHorariosId] = useState(null);
   const [guardandoHorariosId, setGuardandoHorariosId] = useState(null);
@@ -314,6 +335,180 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
   useEffect(() => {
     setServiciosClub(serviciosInicialesClub);
   }, [idClubActual, serviciosInicialesClub]);
+
+  /*
+    Política de cancelación/modificación del club.
+    El backend guarda esta configuración en el club y cada reserva nueva
+    conserva un snapshot de la política vigente al momento de reservar.
+  */
+  const OPCIONES_HORAS_CANCELACION = [2, 4, 6, 12, 24, 48];
+
+  const obtenerHorasCancelacionIniciales = () => {
+    const valor = Number(
+      clubPrincipal?.horas_anticipacion_cancelacion ??
+      club?.horas_anticipacion_cancelacion ??
+      2
+    );
+
+    if (!Number.isInteger(valor) || valor < 1 || valor > 168) {
+      return 2;
+    }
+
+    return valor;
+  };
+
+  const horasCancelacionIniciales = obtenerHorasCancelacionIniciales();
+
+  const [horasCancelacionClub, setHorasCancelacionClub] = useState(
+    horasCancelacionIniciales
+  );
+  const [opcionHorasCancelacion, setOpcionHorasCancelacion] = useState(
+    OPCIONES_HORAS_CANCELACION.includes(horasCancelacionIniciales)
+      ? String(horasCancelacionIniciales)
+      : 'personalizado'
+  );
+  const [horasCancelacionPersonalizadas, setHorasCancelacionPersonalizadas] =
+    useState(
+      OPCIONES_HORAS_CANCELACION.includes(horasCancelacionIniciales)
+        ? ''
+        : String(horasCancelacionIniciales)
+    );
+  const [guardandoPoliticaCancelacion, setGuardandoPoliticaCancelacion] =
+    useState(false);
+
+  useEffect(() => {
+    const valor = obtenerHorasCancelacionIniciales();
+
+    setHorasCancelacionClub(valor);
+
+    if (OPCIONES_HORAS_CANCELACION.includes(valor)) {
+      setOpcionHorasCancelacion(String(valor));
+      setHorasCancelacionPersonalizadas('');
+    } else {
+      setOpcionHorasCancelacion('personalizado');
+      setHorasCancelacionPersonalizadas(String(valor));
+    }
+  }, [
+    idClubActual,
+    clubPrincipal?.horas_anticipacion_cancelacion,
+    club?.horas_anticipacion_cancelacion,
+  ]);
+
+  const handleCambioOpcionCancelacion = (e) => {
+    const valor = e.target.value;
+    setOpcionHorasCancelacion(valor);
+
+    if (valor !== 'personalizado') {
+      setHorasCancelacionPersonalizadas('');
+    }
+  };
+
+  const handleGuardarPoliticaCancelacion = async () => {
+    if (!idClubActual) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'Club no disponible',
+        text: 'No se pudo identificar el club para guardar la política.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+      return;
+    }
+
+    const horas =
+      opcionHorasCancelacion === 'personalizado'
+        ? Number(horasCancelacionPersonalizadas)
+        : Number(opcionHorasCancelacion);
+
+    if (!Number.isInteger(horas) || horas < 1 || horas > 168) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Cantidad de horas no válida',
+        text: 'Ingresá un número entero entre 1 y 168 horas.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+      return;
+    }
+
+    setGuardandoPoliticaCancelacion(true);
+
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error(
+          'La sesión no está disponible. Cerrá sesión e ingresá nuevamente.'
+        );
+      }
+
+      const response = await fetch(apiUrl(`/club/${idClubActual}`), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          horas_anticipacion_cancelacion: horas,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const mensaje = Array.isArray(data?.message)
+          ? data.message.join(' ')
+          : data?.message ||
+          data?.error ||
+          'No se pudo guardar la política de cancelación.';
+
+        throw new Error(mensaje);
+      }
+
+      const horasGuardadas = Number(
+        data?.horas_anticipacion_cancelacion ?? horas
+      );
+
+      setHorasCancelacionClub(horasGuardadas);
+
+      if (OPCIONES_HORAS_CANCELACION.includes(horasGuardadas)) {
+        setOpcionHorasCancelacion(String(horasGuardadas));
+        setHorasCancelacionPersonalizadas('');
+      } else {
+        setOpcionHorasCancelacion('personalizado');
+        setHorasCancelacionPersonalizadas(String(horasGuardadas));
+      }
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Política actualizada',
+        text: `Las nuevas reservas requerirán al menos ${horasGuardadas === 1
+          ? '1 hora'
+          : `${horasGuardadas} horas`
+          } de anticipación para cancelar o modificar.`,
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+    } catch (error) {
+      console.error(
+        'Error al guardar política de cancelación:',
+        error
+      );
+
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo guardar la política',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    } finally {
+      setGuardandoPoliticaCancelacion(false);
+    }
+  };
 
   const handleGuardarServiciosClub = async () => {
     if (!idClubActual) {
@@ -581,6 +776,605 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     }
   }, [clubPrincipal?.id_club]);
 
+
+  /* =========================================================
+     TURNOS FIJOS
+     Solicitudes pendientes + turnos activos.
+  ========================================================= */
+
+  const NOMBRES_DIAS_TURNO_FIJO = [
+    'Domingo',
+    'Lunes',
+    'Martes',
+    'Miércoles',
+    'Jueves',
+    'Viernes',
+    'Sábado',
+  ];
+
+  const normalizarHoraTurnoFijo = (hora) =>
+    hora ? String(hora).slice(0, 5) : '';
+
+  const obtenerClienteTurnoFijo = (turno) => {
+    if (turno?.usuario) {
+      const nombre = [
+        turno.usuario.nombre_usuario,
+        turno.usuario.apellido_usuario,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+
+      return {
+        nombre: nombre || 'Usuario',
+        telefono: turno.usuario.telefono_usuario || '',
+      };
+    }
+
+    return {
+      nombre: turno?.nombre_cliente_manual || 'Cliente',
+      telefono: turno?.telefono_cliente_manual || '',
+    };
+  };
+
+  const obtenerProximaFechaParaDiaSemana = (diaSemana) => {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+
+    const diferencia =
+      (Number(diaSemana) - hoy.getDay() + 7) % 7;
+
+    const fecha = new Date(hoy);
+    fecha.setDate(hoy.getDate() + diferencia);
+
+    const anio = fecha.getFullYear();
+    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+    const dia = String(fecha.getDate()).padStart(2, '0');
+
+    return `${anio}-${mes}-${dia}`;
+  };
+
+  const cargarTurnosFijosClub = async () => {
+    if (!idClubActual) {
+      setSolicitudesTurnosFijos([]);
+      setTurnosFijosActivos([]);
+      return;
+    }
+
+    setCargandoTurnosFijos(true);
+
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error(
+          'La sesión no está disponible. Cerrá sesión e ingresá nuevamente.'
+        );
+      }
+
+      const [pendientesResponse, activosResponse] = await Promise.all([
+        fetch(
+          apiUrl(
+            `/turno-fijo/club/${idClubActual}/solicitudes-pendientes`
+          ),
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        ),
+        fetch(
+          apiUrl(`/turno-fijo/club/${idClubActual}/activos`),
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        ),
+      ]);
+
+      const pendientesData =
+        await pendientesResponse.json().catch(() => []);
+      const activosData =
+        await activosResponse.json().catch(() => []);
+
+      if (!pendientesResponse.ok) {
+        const mensaje = Array.isArray(pendientesData?.message)
+          ? pendientesData.message.join(' ')
+          : pendientesData?.message;
+
+        throw new Error(
+          mensaje ||
+          `No se pudieron cargar las solicitudes de turnos fijos. Error HTTP ${pendientesResponse.status}.`
+        );
+      }
+
+      if (!activosResponse.ok) {
+        const mensaje = Array.isArray(activosData?.message)
+          ? activosData.message.join(' ')
+          : activosData?.message;
+
+        throw new Error(
+          mensaje ||
+          `No se pudieron cargar los turnos fijos activos. Error HTTP ${activosResponse.status}.`
+        );
+      }
+
+      setSolicitudesTurnosFijos(
+        Array.isArray(pendientesData) ? pendientesData : []
+      );
+
+      setTurnosFijosActivos(
+        Array.isArray(activosData) ? activosData : []
+      );
+    } catch (error) {
+      console.error('Error al cargar turnos fijos del club:', error);
+
+      setSolicitudesTurnosFijos([]);
+      setTurnosFijosActivos([]);
+
+      Swal.fire({
+        icon: 'error',
+        title: 'No se pudieron cargar los turnos fijos',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    } finally {
+      setCargandoTurnosFijos(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!idClubActual) return;
+
+    cargarTurnosFijosClub();
+  }, [idClubActual]);
+
+  const handleAprobarTurnoFijo = async (solicitud) => {
+    if (!solicitud?.id_turno_fijo) return;
+
+    const idDeporteSolicitud =
+      Number(solicitud?.deporte?.id_deporte);
+
+    const canchasCompatibles = canchas.filter(
+      (cancha) =>
+        Number(getDeporteId(cancha)) ===
+        idDeporteSolicitud
+    );
+
+    if (!canchasCompatibles.length) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'No hay cancha compatible',
+        text: 'El club no tiene una cancha activa disponible para el deporte solicitado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+      return;
+    }
+
+    const cliente = obtenerClienteTurnoFijo(solicitud);
+    const diaSemana = Number(solicitud.dia_semana);
+    const nombreDia =
+      NOMBRES_DIAS_TURNO_FIJO[diaSemana] || 'Día';
+    const horaInicio =
+      normalizarHoraTurnoFijo(solicitud.hora_inicio);
+
+    const opcionesCancha = canchasCompatibles
+      .map((cancha) => {
+        const idCancha = getCanchaId(cancha);
+        const nombre =
+          cancha.nombre_cancha ||
+          cancha.nombre ||
+          `Cancha ${idCancha}`;
+
+        return `<option value="${idCancha}">${nombre}</option>`;
+      })
+      .join('');
+
+    const fechaSugerida =
+      obtenerProximaFechaParaDiaSemana(diaSemana);
+
+    const resultado = await Swal.fire({
+      icon: 'question',
+      title: 'Aprobar turno fijo',
+      html: `
+        <div style="text-align:left;line-height:1.45;">
+          <p style="margin:0 0 6px;">
+            <strong>${cliente.nombre}</strong>
+          </p>
+          <p style="margin:0 0 14px;">
+            ${solicitud?.deporte?.nombre_deporte || 'Deporte'} ·
+            ${nombreDia} ${horaInicio} hs
+          </p>
+
+          <label
+            for="turno-fijo-cancha"
+            style="display:block;font-weight:700;margin-bottom:6px;"
+          >
+            Cancha
+          </label>
+          <select
+            id="turno-fijo-cancha"
+            class="swal2-select"
+            style="display:block;width:100%;margin:0 0 16px;"
+          >
+            ${opcionesCancha}
+          </select>
+
+          <label
+            for="turno-fijo-fecha-inicio"
+            style="display:block;font-weight:700;margin-bottom:6px;"
+          >
+            Comienza el
+          </label>
+          <input
+            id="turno-fijo-fecha-inicio"
+            type="date"
+            class="swal2-input"
+            value="${fechaSugerida}"
+            min="${obtenerFechaLocalISO()}"
+            style="display:block;width:100%;margin:0;"
+          />
+
+          <small style="display:block;margin-top:12px;">
+            La fecha debe caer un ${nombreDia.toLowerCase()}.
+          </small>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: 'Aprobar',
+      cancelButtonText: 'Volver',
+      confirmButtonColor: '#16a34a',
+      cancelButtonColor: '#64748b',
+      reverseButtons: true,
+      preConfirm: () => {
+        const popup = Swal.getPopup();
+        const idCancha = Number(
+          popup?.querySelector('#turno-fijo-cancha')?.value
+        );
+
+        const fechaInicio = String(
+          popup?.querySelector('#turno-fijo-fecha-inicio')?.value || ''
+        );
+
+        if (!idCancha || !fechaInicio) {
+          Swal.showValidationMessage(
+            'Seleccioná la cancha y la fecha de inicio.'
+          );
+          return false;
+        }
+
+        const [anio, mes, dia] =
+          fechaInicio.split('-').map(Number);
+
+        const diaFecha = new Date(
+          Date.UTC(anio, mes - 1, dia)
+        ).getUTCDay();
+
+        if (diaFecha !== diaSemana) {
+          Swal.showValidationMessage(
+            `La fecha de inicio debe ser un ${nombreDia.toLowerCase()}.`
+          );
+          return false;
+        }
+
+        return {
+          id_cancha: idCancha,
+          fecha_inicio: fechaInicio,
+        };
+      },
+    });
+
+    if (!resultado.isConfirmed || !resultado.value) return;
+
+    setProcesandoTurnoFijoId(
+      solicitud.id_turno_fijo
+    );
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(
+        apiUrl(
+          `/turno-fijo/${solicitud.id_turno_fijo}/aprobar`
+        ),
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(resultado.value),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const mensaje = Array.isArray(data?.message)
+          ? data.message.join(' ')
+          : data?.message;
+
+        throw new Error(
+          mensaje || 'No se pudo aprobar el turno fijo.'
+        );
+      }
+
+      await cargarTurnosFijosClub();
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Turno fijo aprobado',
+        text: 'El turno ya quedó activo y bloquea ese horario todas las semanas.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+    } catch (error) {
+      console.error('Error al aprobar turno fijo:', error);
+
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo aprobar',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    } finally {
+      setProcesandoTurnoFijoId(null);
+    }
+  };
+
+  const handleRechazarTurnoFijo = async (solicitud) => {
+    if (!solicitud?.id_turno_fijo) return;
+
+    setProcesandoTurnoFijoId(
+      solicitud.id_turno_fijo
+    );
+
+    try {
+      const token = localStorage.getItem('token');
+
+      const alternativasResponse = await fetch(
+        apiUrl(
+          `/turno-fijo/${solicitud.id_turno_fijo}/alternativas`
+        ),
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const alternativasData =
+        await alternativasResponse.json().catch(() => []);
+
+      if (!alternativasResponse.ok) {
+        const mensaje = Array.isArray(
+          alternativasData?.message
+        )
+          ? alternativasData.message.join(' ')
+          : alternativasData?.message;
+
+        throw new Error(
+          mensaje ||
+          'No se pudieron consultar las alternativas.'
+        );
+      }
+
+      const alternativas = Array.isArray(
+        alternativasData
+      )
+        ? alternativasData
+        : [];
+
+      const alternativasHtml = alternativas.length
+        ? `
+          <div style="margin-top:16px;">
+            <strong style="display:block;margin-bottom:8px;">
+              Podés proponer hasta 3 alternativas
+            </strong>
+
+            <div
+              style="
+                max-height:230px;
+                overflow:auto;
+                border:1px solid #dbe4ef;
+                border-radius:8px;
+                padding:8px 10px;
+              "
+            >
+              ${alternativas
+          .map((alternativa, index) => {
+            const nombreDia =
+              NOMBRES_DIAS_TURNO_FIJO[
+              Number(alternativa.dia_semana)
+              ] || 'Día';
+
+            return `
+                    <label
+                      style="
+                        display:flex;
+                        align-items:center;
+                        gap:8px;
+                        padding:8px 0;
+                        cursor:pointer;
+                      "
+                    >
+                      <input
+                        type="checkbox"
+                        class="turno-fijo-alternativa-checkbox"
+                        value="${index}"
+                      />
+                      <span>
+                        ${nombreDia} ·
+                        ${normalizarHoraTurnoFijo(
+              alternativa.hora_inicio
+            )} a
+                        ${normalizarHoraTurnoFijo(
+              alternativa.hora_fin
+            )} hs
+                      </span>
+                    </label>
+                  `;
+          })
+          .join('')}
+            </div>
+          </div>
+        `
+        : `
+          <p style="margin-top:16px;">
+            No hay otras alternativas estructurales disponibles en este momento.
+          </p>
+        `;
+
+      const resultado = await Swal.fire({
+        icon: 'warning',
+        title: 'Rechazar solicitud',
+        html: `
+          <div style="text-align:left;line-height:1.45;">
+            <label
+              for="turno-fijo-motivo"
+              style="display:block;font-weight:700;margin-bottom:6px;"
+            >
+              Motivo
+            </label>
+
+            <textarea
+              id="turno-fijo-motivo"
+              class="swal2-textarea"
+              maxlength="500"
+              placeholder="Explicale brevemente al usuario por qué no podés aceptar ese horario."
+              style="display:block;width:100%;margin:0;"
+            ></textarea>
+
+            ${alternativasHtml}
+          </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Rechazar solicitud',
+        cancelButtonText: 'Volver',
+        confirmButtonColor: '#dc3545',
+        cancelButtonColor: '#64748b',
+        reverseButtons: true,
+        preConfirm: () => {
+          const popup = Swal.getPopup();
+
+          const motivo = String(
+            popup?.querySelector('#turno-fijo-motivo')?.value || ''
+          ).trim();
+
+          if (motivo.length < 2) {
+            Swal.showValidationMessage(
+              'Indicá un motivo para rechazar la solicitud.'
+            );
+            return false;
+          }
+
+          const seleccionadas = [
+            ...(popup?.querySelectorAll(
+              '.turno-fijo-alternativa-checkbox:checked'
+            ) || []),
+          ];
+
+          if (seleccionadas.length > 3) {
+            Swal.showValidationMessage(
+              'Podés proponer como máximo 3 alternativas.'
+            );
+            return false;
+          }
+
+          const alternativasElegidas =
+            seleccionadas.map((checkbox) => {
+              const alternativa =
+                alternativas[Number(checkbox.value)];
+
+              return {
+                dia_semana: Number(
+                  alternativa.dia_semana
+                ),
+                hora_inicio:
+                  normalizarHoraTurnoFijo(
+                    alternativa.hora_inicio
+                  ),
+                hora_fin:
+                  normalizarHoraTurnoFijo(
+                    alternativa.hora_fin
+                  ),
+              };
+            });
+
+          return {
+            motivo,
+            alternativas: alternativasElegidas,
+          };
+        },
+      });
+
+      if (!resultado.isConfirmed || !resultado.value) {
+        return;
+      }
+
+      const response = await fetch(
+        apiUrl(
+          `/turno-fijo/${solicitud.id_turno_fijo}/rechazar`
+        ),
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(resultado.value),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const mensaje = Array.isArray(data?.message)
+          ? data.message.join(' ')
+          : data?.message;
+
+        throw new Error(
+          mensaje || 'No se pudo rechazar la solicitud.'
+        );
+      }
+
+      await cargarTurnosFijosClub();
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Solicitud rechazada',
+        text: 'La respuesta quedó registrada correctamente.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+    } catch (error) {
+      console.error('Error al rechazar turno fijo:', error);
+
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo rechazar',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    } finally {
+      setProcesandoTurnoFijoId(null);
+    }
+  };
+
+
   /* =========================================================
      FORMATEO DE IMPORTES
      Permite ver $40.000 en pantalla,
@@ -687,50 +1481,163 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
   const getDeporteId = (cancha) =>
     cancha.id_deporte?.id_deporte || cancha.deporte?.id_deporte || cancha.id_deporte || '';
 
-  const getHorariosDeCancha = (idCancha) =>
-    horariosPorCancha[idCancha] || horariosIniciales;
 
-  const mapDisponibilidadesAHorarios = (disponibilidades) => {
-    if (!Array.isArray(disponibilidades) || disponibilidades.length === 0) {
-      return horariosIniciales;
+  const horaAMinutos = (hora) => {
+    if (!hora) return null;
+
+    const [h, m = '0'] = String(hora).split(':').map(Number);
+
+    if (
+      Number.isNaN(h) ||
+      Number.isNaN(m) ||
+      h < 0 ||
+      h > 24 ||
+      m < 0 ||
+      m > 59 ||
+      (h === 24 && m !== 0)
+    ) {
+      return null;
     }
 
-    const horasGuardadas = new Set();
-
-    disponibilidades.forEach((d) => {
-      const horaCorta = d.hora_inicio?.slice(0, 5);
-      if (horaCorta) horasGuardadas.add(horaCorta);
-    });
-
-    const idsHorarios = horarios
-      .filter((h) => horasGuardadas.has(h.hora))
-      .map((h) => h.id);
-
-    return idsHorarios.length > 0 ? idsHorarios : horariosIniciales;
+    return h * 60 + m;
   };
 
-  const construirDisponibilidades = (idsHorarios) => {
-    const horasSeleccionadas = horarios
-      .filter((h) => idsHorarios.includes(h.id))
-      .map((h) => h.hora);
+  const minutosAHora = (minutos) => {
+    if (minutos === 1440) return '24:00';
 
-    const disponibilidades = [];
+    const h = Math.floor(minutos / 60);
+    const m = minutos % 60;
 
-    for (let dia = 0; dia < 7; dia++) {
-      horasSeleccionadas.forEach((hora) => {
-        const [h, m] = hora.split(':').map(Number);
-        const horaFin = `${String(h + 1).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
 
-        disponibilidades.push({
-          dia_semana: dia,
-          hora_inicio: `${hora}:00`,
-          hora_fin: horaFin,
-        });
+  const getConfigHorariosCancha = (idCancha) =>
+    configHorariosPorCancha[idCancha] || CONFIG_HORARIO_DEFAULT;
+
+  const actualizarConfigHorario = (idCancha, cambios) => {
+    setConfigHorariosPorCancha((prev) => ({
+      ...prev,
+      [idCancha]: {
+        ...(prev[idCancha] || CONFIG_HORARIO_DEFAULT),
+        ...cambios,
+      },
+    }));
+  };
+
+  const toggleDiaHorario = (idCancha, dia) => {
+    const actual = getConfigHorariosCancha(idCancha);
+
+    const dias = actual.dias.includes(dia)
+      ? actual.dias.filter((item) => item !== dia)
+      : [...actual.dias, dia].sort((a, b) => a - b);
+
+    actualizarConfigHorario(idCancha, { dias });
+  };
+
+  const generarTurnosPreview = (config) => {
+    const inicio = horaAMinutos(config.horaInicio);
+    const ultimoInicio = horaAMinutos(config.ultimoTurno);
+    const duracion = Number(config.duracion);
+
+    if (
+      inicio === null ||
+      ultimoInicio === null ||
+      !Number.isFinite(duracion) ||
+      duracion <= 0
+    ) {
+      return [];
+    }
+
+    if (ultimoInicio < inicio) return [];
+
+    const diferencia = ultimoInicio - inicio;
+
+    if (diferencia % duracion !== 0) {
+      return [];
+    }
+
+    if (ultimoInicio + duracion > 1440) {
+      return [];
+    }
+
+    const turnos = [];
+
+    for (
+      let turnoInicio = inicio;
+      turnoInicio <= ultimoInicio;
+      turnoInicio += duracion
+    ) {
+      turnos.push({
+        hora_inicio: minutosAHora(turnoInicio),
+        hora_fin: minutosAHora(turnoInicio + duracion),
       });
     }
 
+    return turnos;
+  };
+
+  const construirDisponibilidadesDesdeConfig = (config) => {
+    const turnos = generarTurnosPreview(config);
+
+    const disponibilidades = [];
+
+    config.dias.forEach((dia) => {
+      turnos.forEach((turno) => {
+        disponibilidades.push({
+          dia_semana: dia,
+          hora_inicio: turno.hora_inicio,
+          hora_fin: turno.hora_fin,
+        });
+      });
+    });
+
     return disponibilidades;
   };
+
+  const inferirConfigDesdeDisponibilidades = (disponibilidades) => {
+    if (
+      !Array.isArray(disponibilidades) ||
+      disponibilidades.length === 0
+    ) {
+      return { ...CONFIG_HORARIO_DEFAULT };
+    }
+
+    const ordenadas = [...disponibilidades].sort((a, b) =>
+      String(a.hora_inicio).localeCompare(String(b.hora_inicio))
+    );
+
+    const dias = [
+      ...new Set(
+        disponibilidades.map((item) => Number(item.dia_semana))
+      ),
+    ].sort((a, b) => a - b);
+
+    const primerTurno = ordenadas[0];
+
+    const inicioPrimerTurno = horaAMinutos(primerTurno.hora_inicio);
+    const finPrimerTurno = horaAMinutos(primerTurno.hora_fin);
+
+    const duracion =
+      inicioPrimerTurno !== null && finPrimerTurno !== null
+        ? finPrimerTurno - inicioPrimerTurno
+        : 60;
+
+    const horasInicio = [
+      ...new Set(
+        disponibilidades.map((item) =>
+          String(item.hora_inicio).slice(0, 5)
+        )
+      ),
+    ].sort();
+
+    return {
+      duracion: duracion > 0 ? duracion : 60,
+      horaInicio: horasInicio[0] || '09:00',
+      ultimoTurno: horasInicio.at(-1) || '22:00',
+      dias: dias.length ? dias : [0, 1, 2, 3, 4, 5, 6],
+    };
+  };
+
 
   /* =========================================================
      CARGA DE CANCHAS DEL CLUB
@@ -815,19 +1722,30 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
         const entradas = await Promise.all(
           canchas.map(async (cancha) => {
             const idCancha = getCanchaId(cancha);
+
             const response = await fetch(
               apiUrl(`/disponibilidad/cancha/${idCancha}`),
-              { headers: { 'Authorization': `Bearer ${token}` } }
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              }
             );
 
-            if (!response.ok) return [idCancha, horariosIniciales];
+            if (!response.ok) {
+              return [idCancha, { ...CONFIG_HORARIO_DEFAULT }];
+            }
 
             const disponibilidades = await response.json();
-            return [idCancha, mapDisponibilidadesAHorarios(disponibilidades)];
+
+            return [
+              idCancha,
+              inferirConfigDesdeDisponibilidades(disponibilidades),
+            ];
           })
         );
 
-        setHorariosPorCancha((prev) => ({
+        setConfigHorariosPorCancha((prev) => ({
           ...prev,
           ...Object.fromEntries(entradas),
         }));
@@ -839,36 +1757,53 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     cargarHorariosGuardados();
   }, [showSettings, canchas]);
 
-  const toggleHorarioCancha = (idCancha, horarioId) => {
-    setHorariosPorCancha((prev) => {
-      const actuales = prev[idCancha] || horariosIniciales;
 
-      return {
-        ...prev,
-        [idCancha]: actuales.includes(horarioId)
-          ? actuales.filter((id) => id !== horarioId)
-          : [...actuales, horarioId],
-      };
-    });
-  };
 
   const handleGuardarHorarios = async (idCancha) => {
     if (!idCancha) return;
 
+    const config = getConfigHorariosCancha(idCancha);
+    const turnos = generarTurnosPreview(config);
+
+    if (!config.dias.length) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Elegí al menos un día',
+        text: 'Seleccioná los días en los que esta cancha recibe reservas.',
+        confirmButtonText: 'Aceptar',
+      });
+      return;
+    }
+
+    if (!turnos.length) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Revisá los horarios',
+        text: 'El último turno debe coincidir con la duración elegida y finalizar como máximo a las 00:00.',
+        confirmButtonText: 'Aceptar',
+      });
+      return;
+    }
+
     setGuardandoHorariosId(idCancha);
 
     try {
-      const disponibilidades = construirDisponibilidades(getHorariosDeCancha(idCancha));
+      const disponibilidades =
+        construirDisponibilidadesDesdeConfig(config);
+
       const token = localStorage.getItem('token');
 
-      const response = await fetch(apiUrl(`/disponibilidad/cancha/${idCancha}`), {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(disponibilidades),
-      });
+      const response = await fetch(
+        apiUrl(`/disponibilidad/cancha/${idCancha}`),
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(disponibilidades),
+        }
+      );
 
       if (!response.ok) {
         throw new Error('No se pudieron guardar los horarios');
@@ -879,7 +1814,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
       Swal.fire({
         icon: 'success',
         title: '¡Listo!',
-        text: 'Los horarios de la cancha fueron guardados correctamente.',
+        text: 'La configuración de turnos fue guardada correctamente.',
         confirmButtonText: 'Aceptar',
         confirmButtonColor: '#087bff',
         background: '#ffffff',
@@ -892,10 +1827,11 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
       });
     } catch (error) {
       console.error('Error al guardar horarios:', error);
+
       Swal.fire({
         icon: 'error',
         title: 'Error',
-        text: 'No se pudieron guardar los horarios de esta cancha. Intentá nuevamente.',
+        text: 'No se pudo guardar la configuración de esta cancha. Intentá nuevamente.',
         confirmButtonText: 'Aceptar',
       });
     } finally {
@@ -3046,12 +3982,47 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
           <div className="pdc-header-actions">
             <button
               className="pdc-settings-button"
-              onClick={() => setShowSettings(!showSettings)}
+              onClick={() => {
+                setShowSettings((prev) => !prev);
+                setShowResumenMensual(false);
+              }}
               title="Configuración"
             >
-              <i className={showSettings ? 'bi bi-arrow-left' : 'bi bi-gear'}></i>
-              {showSettings ? 'Volver al dashboard' : 'Configuración'}
+              <i
+                className={
+                  showSettings
+                    ? 'bi bi-arrow-left'
+                    : 'bi bi-gear'
+                }
+              ></i>
+
+              {showSettings
+                ? 'Volver al dashboard'
+                : 'Configuración'}
             </button>
+
+            <button
+              type="button"
+              className="pdc-settings-button"
+              onClick={() => {
+                setShowResumenMensual((prev) => !prev);
+                setShowSettings(false);
+              }}
+              title="Resumen mensual"
+            >
+              <i
+                className={
+                  showResumenMensual
+                    ? 'bi bi-arrow-left'
+                    : 'bi bi-bar-chart-line'
+                }
+              ></i>
+
+              {showResumenMensual
+                ? 'Volver al dashboard'
+                : 'Resumen mensual'}
+            </button>
+
             <button
               className="pdc-pay-button"
               onClick={abrirModalSuscripcion}
@@ -3254,6 +4225,112 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                 </div>
               </div>
 
+              {/* POLÍTICA DE CANCELACIÓN Y MODIFICACIÓN */}
+              <div className="pdc-settings-box">
+                <div style={{ marginBottom: '16px' }}>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      marginBottom: '6px',
+                      color: '#087bff',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      letterSpacing: '0.08em',
+                    }}
+                  >
+                    RESERVAS
+                  </span>
+
+                  <h3 style={{ marginBottom: '6px' }}>
+                    Anticipación para cancelar o modificar
+                  </h3>
+
+                  <p
+                    className="pdc-settings-description"
+                    style={{ marginBottom: 0 }}
+                  >
+                    Definí con cuánta anticipación un usuario puede cancelar o
+                    modificar una reserva. El cambio se aplica a las nuevas
+                    reservas; las reservas ya creadas conservan la política que
+                    estaba vigente cuando fueron realizadas.
+                  </p>
+                </div>
+
+                <div className="pdc-form-group">
+                  <label htmlFor="horas-cancelacion-club">
+                    Anticipación mínima
+                  </label>
+
+                  <select
+                    id="horas-cancelacion-club"
+                    value={opcionHorasCancelacion}
+                    onChange={handleCambioOpcionCancelacion}
+                    disabled={guardandoPoliticaCancelacion}
+                  >
+                    <option value="2">2 horas</option>
+                    <option value="4">4 horas</option>
+                    <option value="6">6 horas</option>
+                    <option value="12">12 horas</option>
+                    <option value="24">24 horas</option>
+                    <option value="48">48 horas</option>
+                    <option value="personalizado">Personalizado</option>
+                  </select>
+                </div>
+
+                {opcionHorasCancelacion === 'personalizado' && (
+                  <div className="pdc-form-group">
+                    <label htmlFor="horas-cancelacion-personalizadas">
+                      Cantidad de horas
+                    </label>
+
+                    <input
+                      id="horas-cancelacion-personalizadas"
+                      type="number"
+                      min="1"
+                      max="168"
+                      step="1"
+                      inputMode="numeric"
+                      placeholder="Ej: 72"
+                      value={horasCancelacionPersonalizadas}
+                      onChange={(e) =>
+                        setHorasCancelacionPersonalizadas(e.target.value)
+                      }
+                      disabled={guardandoPoliticaCancelacion}
+                    />
+
+                    <small className="pdc-services-help">
+                      Podés elegir entre 1 y 168 horas.
+                    </small>
+                  </div>
+                )}
+
+                <div
+                  className="pdc-services-actions"
+                  style={{ marginTop: '14px' }}
+                >
+                  <span>
+                    Política actual:{' '}
+                    <strong>
+                      {horasCancelacionClub === 1
+                        ? '1 hora'
+                        : `${horasCancelacionClub} horas`}
+                    </strong>
+                  </span>
+
+                  <button
+                    type="button"
+                    className="pdc-btn-save-settings"
+                    onClick={handleGuardarPoliticaCancelacion}
+                    disabled={guardandoPoliticaCancelacion}
+                  >
+                    <i className="bi bi-clock-history"></i>
+                    {guardandoPoliticaCancelacion
+                      ? 'Guardando...'
+                      : 'Guardar política'}
+                  </button>
+                </div>
+              </div>
+
               <div className="pdc-settings-box">
                 <h3>Canchas configuradas</h3>
                 <p className="pdc-settings-description">
@@ -3269,7 +4346,8 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                       const editando = canchaEditandoId === idCancha;
                       const editandoHorarios = canchaHorariosId === idCancha;
                       const editandoBloqueos = canchaBloqueosId === idCancha;
-                      const horariosActuales = getHorariosDeCancha(idCancha);
+                      const configHorario = getConfigHorariosCancha(idCancha);
+                      const previewTurnos = generarTurnosPreview(configHorario);
                       const bloqueosActuales = bloqueosPorCancha[idCancha] || [];
 
                       return (
@@ -3380,7 +4458,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                                 </div>
 
                                 <div className="pdc-form-group">
-                                  <label>Precio por hora ($):</label>
+                                  <label>Precio del turno ($):</label>
                                   <input
                                     type="text"
                                     inputMode="numeric"
@@ -3424,17 +4502,126 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
                           {editandoHorarios && (
                             <div className="pdc-court-schedule-editor">
-                              <div className="pdc-horarios-grid">
-                                {horarios.map((horario) => (
-                                  <label key={horario.id} className="pdc-horario-checkbox">
-                                    <input
-                                      type="checkbox"
-                                      checked={horariosActuales.includes(horario.id)}
-                                      onChange={() => toggleHorarioCancha(idCancha, horario.id)}
-                                    />
-                                    <span className="pdc-horario-label">{horario.hora}</span>
-                                  </label>
-                                ))}
+                              <div className="pdc-schedule-editor-header">
+                                <div>
+                                  <h4>Configuración de turnos</h4>
+                                  <p>
+                                    Definí la duración y el horario de esta cancha.
+                                    Cada cancha puede tener una grilla diferente.
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="pdc-schedule-config-grid">
+                                <div className="pdc-form-group">
+                                  <label>Duración del turno:</label>
+
+                                  <select
+                                    value={configHorario.duracion}
+                                    onChange={(e) =>
+                                      actualizarConfigHorario(idCancha, {
+                                        duracion: Number(e.target.value),
+                                      })
+                                    }
+                                  >
+                                    <option value={60}>60 minutos</option>
+                                    <option value={90}>90 minutos</option>
+                                    <option value={120}>120 minutos</option>
+                                  </select>
+                                </div>
+
+                                <div className="pdc-form-group">
+                                  <label>Primer turno:</label>
+
+                                  <input
+                                    type="time"
+                                    step="900"
+                                    value={configHorario.horaInicio}
+                                    onChange={(e) =>
+                                      actualizarConfigHorario(idCancha, {
+                                        horaInicio: e.target.value,
+                                      })
+                                    }
+                                  />
+                                </div>
+
+                                <div className="pdc-form-group">
+                                  <label>Inicio del último turno:</label>
+
+                                  <input
+                                    type="time"
+                                    step="900"
+                                    value={configHorario.ultimoTurno}
+                                    onChange={(e) =>
+                                      actualizarConfigHorario(idCancha, {
+                                        ultimoTurno: e.target.value,
+                                      })
+                                    }
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="pdc-schedule-days">
+                                <span className="pdc-schedule-section-label">
+                                  Días habilitados
+                                </span>
+
+                                <div className="pdc-schedule-days-grid">
+                                  {[
+                                    { id: 1, label: 'Lun' },
+                                    { id: 2, label: 'Mar' },
+                                    { id: 3, label: 'Mié' },
+                                    { id: 4, label: 'Jue' },
+                                    { id: 5, label: 'Vie' },
+                                    { id: 6, label: 'Sáb' },
+                                    { id: 0, label: 'Dom' },
+                                  ].map((dia) => (
+                                    <label
+                                      key={dia.id}
+                                      className={`pdc-schedule-day ${configHorario.dias.includes(dia.id)
+                                        ? 'is-active'
+                                        : ''
+                                        }`}
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        checked={configHorario.dias.includes(dia.id)}
+                                        onChange={() =>
+                                          toggleDiaHorario(idCancha, dia.id)
+                                        }
+                                      />
+
+                                      <span>{dia.label}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="pdc-schedule-preview">
+                                <span className="pdc-schedule-section-label">
+                                  Vista previa de turnos
+                                </span>
+
+                                {previewTurnos.length > 0 ? (
+                                  <div className="pdc-schedule-preview-grid">
+                                    {previewTurnos.map((turno) => (
+                                      <span
+                                        key={`${turno.hora_inicio}-${turno.hora_fin}`}
+                                        className="pdc-schedule-preview-item"
+                                      >
+                                        {turno.hora_inicio} –{' '}
+                                        {turno.hora_fin === '24:00'
+                                          ? '00:00'
+                                          : turno.hora_fin}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <p className="pdc-schedule-invalid">
+                                    La combinación elegida no genera una grilla válida.
+                                    Revisá la duración y el último turno.
+                                  </p>
+                                )}
                               </div>
 
                               <div className="pdc-settings-actions">
@@ -3444,7 +4631,9 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                                   onClick={() => handleGuardarHorarios(idCancha)}
                                   disabled={guardandoHorariosId === idCancha}
                                 >
-                                  {guardandoHorariosId === idCancha ? 'Guardando...' : 'Guardar horarios'}
+                                  {guardandoHorariosId === idCancha
+                                    ? 'Guardando...'
+                                    : 'Guardar configuración'}
                                 </button>
                               </div>
                             </div>
@@ -3468,7 +4657,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                                   type="button"
                                   className="pdc-block-editor-close"
                                   onClick={() => setCanchaBloqueosId(null)}
-                                  aria-label="Cerrar gestión de bloqueos"
+                                  aria-lab el="Cerrar gestión de bloqueos"
                                 >
                                   <i className="bi bi-x-lg"></i>
                                 </button>
@@ -3777,7 +4966,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
           </section>
         )}
 
-        {!showSettings && (
+        {!showSettings && !showResumenMensual && (
           <>
             {/* CARDS SUPERIORES CON ESTADÍSTICAS */}
             <section className="pdc-stats-grid">
@@ -3884,7 +5073,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
                         {/* Precio por hora con botón de edición */}
                         <div className="pdc-court-reservas">
-                          <p>Precio por hora</p>
+                          <p>Precio por turno</p>
 
                           {editingCanchaId === cancha.id_cancha ? (
                             <div className="pdc-price-editor">
@@ -4059,6 +5248,230 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                         </div>
                       ))
                     )}
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* TURNOS FIJOS */}
+            <section className="pdc-main-grid">
+              <div className="pdc-panel">
+                <div className="pdc-panel-header">
+                  <div>
+                    <h3>Solicitudes de turnos fijos</h3>
+                    <small>
+                      Aprobá una cancha y fecha de inicio, o rechazá proponiendo alternativas.
+                    </small>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="pdc-light-button"
+                    onClick={cargarTurnosFijosClub}
+                    disabled={cargandoTurnosFijos}
+                  >
+                    <i className="bi bi-arrow-clockwise"></i>
+                    {cargandoTurnosFijos
+                      ? 'Actualizando...'
+                      : 'Actualizar'}
+                  </button>
+                </div>
+
+                {cargandoTurnosFijos ? (
+                  <p className="pdc-alert pdc-alert-info">
+                    Cargando solicitudes...
+                  </p>
+                ) : solicitudesTurnosFijos.length === 0 ? (
+                  <p className="pdc-alert pdc-alert-info">
+                    No hay solicitudes pendientes.
+                  </p>
+                ) : (
+                  <div className="pdc-upcoming-reservations-list">
+                    {solicitudesTurnosFijos.map((solicitud) => {
+                      const cliente =
+                        obtenerClienteTurnoFijo(solicitud);
+
+                      const nombreDia =
+                        NOMBRES_DIAS_TURNO_FIJO[
+                        Number(solicitud.dia_semana)
+                        ] || 'Día';
+
+                      const procesando =
+                        String(procesandoTurnoFijoId) ===
+                        String(solicitud.id_turno_fijo);
+
+                      return (
+                        <div
+                          className="pdc-reservation-row"
+                          key={`solicitud-turno-fijo-${solicitud.id_turno_fijo}`}
+                        >
+                          <span>
+                            {normalizarHoraTurnoFijo(
+                              solicitud.hora_inicio
+                            )}
+                          </span>
+
+                          <div className="pdc-reservation-info">
+                            <strong>
+                              {solicitud.deporte?.nombre_deporte ||
+                                'Deporte'}
+                            </strong>
+
+                            <p>
+                              {nombreDia} · {cliente.nombre}
+                            </p>
+
+                            {cliente.telefono && (
+                              <a href={`tel:${cliente.telefono}`}>
+                                <i className="bi bi-telephone-fill"></i>{' '}
+                                {cliente.telefono}
+                              </a>
+                            )}
+                          </div>
+
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '7px',
+                              minWidth: '122px',
+                            }}
+                          >
+                            <button
+                              type="button"
+                              className="pdc-light-button"
+                              onClick={() =>
+                                handleAprobarTurnoFijo(
+                                  solicitud
+                                )
+                              }
+                              disabled={procesando}
+                              style={{
+                                color: '#15803d',
+                                borderColor: '#86efac',
+                              }}
+                            >
+                              <i className="bi bi-check-circle"></i>
+                              Aprobar
+                            </button>
+
+                            <button
+                              type="button"
+                              className="pdc-light-button"
+                              onClick={() =>
+                                handleRechazarTurnoFijo(
+                                  solicitud
+                                )
+                              }
+                              disabled={procesando}
+                              style={{
+                                color: '#dc2626',
+                                borderColor: '#fecaca',
+                              }}
+                            >
+                              <i className="bi bi-x-circle"></i>
+                              Rechazar
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="pdc-panel">
+                <div className="pdc-panel-header">
+                  <div>
+                    <h3>Turnos fijos activos</h3>
+                    <small>
+                      Incluye solicitudes aprobadas y clientes cargados por el club.
+                    </small>
+                  </div>
+                </div>
+
+                {cargandoTurnosFijos ? (
+                  <p className="pdc-alert pdc-alert-info">
+                    Cargando turnos fijos...
+                  </p>
+                ) : turnosFijosActivos.length === 0 ? (
+                  <p className="pdc-alert pdc-alert-info">
+                    No hay turnos fijos activos.
+                  </p>
+                ) : (
+                  <div className="pdc-upcoming-reservations-list">
+                    {turnosFijosActivos.map((turno) => {
+                      const cliente =
+                        obtenerClienteTurnoFijo(turno);
+
+                      const nombreDia =
+                        NOMBRES_DIAS_TURNO_FIJO[
+                        Number(turno.dia_semana)
+                        ] || 'Día';
+
+                      return (
+                        <div
+                          className="pdc-reservation-row"
+                          key={`turno-fijo-activo-${turno.id_turno_fijo}`}
+                        >
+                          <span>
+                            {normalizarHoraTurnoFijo(
+                              turno.hora_inicio
+                            )}
+                          </span>
+
+                          <div className="pdc-reservation-info">
+                            <strong>
+                              {cliente.nombre}
+                            </strong>
+
+                            <p>
+                              {turno.deporte?.nombre_deporte ||
+                                'Deporte'}{' '}
+                              · {nombreDia}{' '}
+                              {normalizarHoraTurnoFijo(
+                                turno.hora_inicio
+                              )}{' '}
+                              a{' '}
+                              {normalizarHoraTurnoFijo(
+                                turno.hora_fin
+                              )}
+                            </p>
+
+                            <small>
+                              {turno.cancha?.nombre_cancha ||
+                                'Cancha sin identificar'}
+                            </small>
+
+                            {cliente.telefono && (
+                              <a href={`tel:${cliente.telefono}`}>
+                                <i className="bi bi-telephone-fill"></i>{' '}
+                                {cliente.telefono}
+                              </a>
+                            )}
+                          </div>
+
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'flex-end',
+                              gap: '5px',
+                            }}
+                          >
+                            <small className="pdc-confirmed">
+                              Activo
+                            </small>
+
+                            <small>
+                              {turno.origen === 'club'
+                                ? 'Cargado por el club'
+                                : 'Solicitado por usuario'}
+                            </small>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -4862,6 +6275,10 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
           </>
         )}
 
+        {!showSettings && showResumenMensual && (
+          <ResumenMensualClub idClub={idClubActual} />
+        )}
+
         {mostrarModalSuscripcion && (
           <div className="pdc-progress-modal-backdrop" onClick={cerrarModalSuscripcion}>
             <div className="pdc-progress-modal" onClick={(e) => e.stopPropagation()}>
@@ -4933,7 +6350,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                 <h3>Primer paso recomendado</h3>
 
                 <p>
-                  Te sugerimos asignarle un <strong>precio por hora</strong> a los
+                  Te sugerimos asignarle un <strong>precio por turno</strong> a los
                   turnos de cada cancha o deporte. Esto es importante para que el
                   sistema pueda calcular correctamente tus ingresos del día y del mes.
                 </p>

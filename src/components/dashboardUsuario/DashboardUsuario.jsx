@@ -51,6 +51,16 @@ const DEPORTES = [
   { id: 10, nombre: 'Pelota Paleta', icono: pelotaPaletaIcon },
 ];
 
+const NOMBRES_DIAS_TURNO_FIJO = [
+  'Domingo',
+  'Lunes',
+  'Martes',
+  'Miércoles',
+  'Jueves',
+  'Viernes',
+  'Sábado',
+];
+
 /*
   Banners disponibles para mostrar en los laterales del dashboard.
   Se alternan de forma aleatoria para que no siempre aparezca la misma publicidad.
@@ -809,6 +819,8 @@ function DashboardUsuario({
     Si la cancha no tiene horarios configurados, se muestran todos los del sistema.
   */
   const [horariosDeCancha, setHorariosDeCancha] = useState([]);
+  const [horaFinPorInicio, setHoraFinPorInicio] = useState({});
+  const [cargandoHorariosCancha, setCargandoHorariosCancha] = useState(false);
 
   /*
     Ocupaciones reales de la cancha y fecha recibidas desde el backend.
@@ -920,60 +932,169 @@ function DashboardUsuario({
   }, [canchaSeleccionada, fechaSeleccionada]);
 
   /*
-    Carga los horarios disponibles de la cancha seleccionada desde el backend.
-    Si la cancha no tiene disponibilidad configurada, usa todos los horarios del sistema.
+    Carga los turnos reales de la cancha seleccionada para el día elegido.
+
+    horariosDeCancha conserva solamente la hora inicial para no modificar
+    el resto del wizard.
+
+    horaFinPorInicio guarda la hora final real de cada turno.
+
+    Si la cancha todavía no tiene una configuración propia, mantiene el
+    comportamiento histórico de DameCancha: turnos de 60 minutos desde
+    las 09:00 hasta las 22:00.
   */
   useEffect(() => {
-    if (!canchaSeleccionada) {
+    if (!canchaSeleccionada || !fechaSeleccionada) {
       setHorariosDeCancha([]);
-      return;
+      setHoraFinPorInicio({});
+      setCargandoHorariosCancha(false);
+      return undefined;
     }
 
-    const idCancha = canchaSeleccionada.id || canchaSeleccionada.id_cancha;
-    if (!idCancha) return;
+    const idCancha =
+      canchaSeleccionada.id || canchaSeleccionada.id_cancha;
+
+    if (!idCancha) {
+      setHorariosDeCancha([]);
+      setHoraFinPorInicio({});
+      setCargandoHorariosCancha(false);
+      return undefined;
+    }
+
+    let activo = true;
+    const controller = new AbortController();
+
+    const cargarHorariosPredeterminados = () => {
+      const horas = HORARIOS.map((h) => h.hora);
+
+      const fines = Object.fromEntries(
+        horas.map((hora) => {
+          const inicioMinutos = convertirHoraAMinutos(hora);
+          const finMinutos = inicioMinutos + 60;
+
+          const horasFin = Math.floor(finMinutos / 60);
+          const minutosFin = finMinutos % 60;
+
+          const horaFin = `${String(horasFin).padStart(2, '0')}:${String(
+            minutosFin
+          ).padStart(2, '0')}`;
+
+          return [hora, horaFin];
+        })
+      );
+
+      setHorariosDeCancha(horas);
+      setHoraFinPorInicio(fines);
+    };
 
     const cargarHorarios = async () => {
+      setCargandoHorariosCancha(true);
+      setHorariosDeCancha([]);
+      setHoraFinPorInicio({});
+
       try {
         const token = localStorage.getItem('token');
+
         const response = await fetch(
           `${API_URL}/disponibilidad/cancha/${idCancha}`,
-          { headers: { 'Authorization': `Bearer ${token}` } }
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            signal: controller.signal,
+          }
         );
 
         if (!response.ok) {
-          // Si no hay disponibilidad configurada, usar todos los horarios
-          setHorariosDeCancha(HORARIOS.map((h) => h.hora));
+          cargarHorariosPredeterminados();
           return;
         }
 
         const disponibilidades = await response.json();
 
-        if (!Array.isArray(disponibilidades) || disponibilidades.length === 0) {
-          // Sin configuración → mostrar todos
-          setHorariosDeCancha(HORARIOS.map((h) => h.hora));
+        /*
+          Si la cancha nunca fue configurada, conserva los turnos
+          tradicionales de una hora desde las 09:00.
+        */
+        if (
+          !Array.isArray(disponibilidades) ||
+          disponibilidades.length === 0
+        ) {
+          cargarHorariosPredeterminados();
           return;
         }
 
-        // Extraer horas únicas desde las disponibilidades
-        const horasUnicas = new Set();
-        disponibilidades.forEach((d) => {
-          const horaCorta = d.hora_inicio?.slice(0, 5);
-          if (horaCorta) horasUnicas.add(horaCorta);
+        /*
+          Mismo criterio que el backend:
+          0 = domingo ... 6 = sábado.
+        */
+        const fechaSQL = normalizarFechaParaComparar(fechaSeleccionada);
+
+        if (!fechaSQL) {
+          setHorariosDeCancha([]);
+          setHoraFinPorInicio({});
+          return;
+        }
+
+        const [anio, mes, dia] = fechaSQL.split('-').map(Number);
+        const diaSemana = new Date(
+          Date.UTC(anio, mes - 1, dia)
+        ).getUTCDay();
+
+        const disponibilidadesDelDia = disponibilidades.filter(
+          (disponibilidad) =>
+            Number(disponibilidad.dia_semana) === diaSemana
+        );
+
+        /*
+          Si la cancha sí está configurada pero el día elegido no tiene
+          turnos cargados, ese día está cerrado. No usamos el fallback.
+        */
+        if (disponibilidadesDelDia.length === 0) {
+          setHorariosDeCancha([]);
+          setHoraFinPorInicio({});
+          return;
+        }
+
+        const turnos = new Map();
+
+        disponibilidadesDelDia.forEach((disponibilidad) => {
+          const horaInicio = normalizarHoraParaComparar(
+            disponibilidad.hora_inicio
+          );
+
+          const horaFin = normalizarHoraParaComparar(
+            disponibilidad.hora_fin
+          );
+
+          if (horaInicio && horaFin) {
+            turnos.set(horaInicio, horaFin);
+          }
         });
 
-        // Ordenar las horas
-        const horasOrdenadas = [...horasUnicas].sort();
+        const horasOrdenadas = [...turnos.keys()].sort();
+
         setHorariosDeCancha(horasOrdenadas);
+        setHoraFinPorInicio(Object.fromEntries(turnos));
       } catch (error) {
+        if (error?.name === 'AbortError') return;
+
         console.error('Error al cargar horarios de cancha:', error);
-        // Fallback: mostrar todos los horarios
-        setHorariosDeCancha(HORARIOS.map((h) => h.hora));
+        cargarHorariosPredeterminados();
+      } finally {
+        if (activo) {
+          setCargandoHorariosCancha(false);
+        }
       }
     };
 
     cargarHorarios();
-  }, [canchaSeleccionada]);
 
+    return () => {
+      activo = false;
+      controller.abort();
+    };
+  }, [canchaSeleccionada, fechaSeleccionada]);
   /*
     Banners laterales del dashboard.
     Se guardan en estado para poder cambiarlos automáticamente cada ciertos segundos.
@@ -1102,6 +1223,16 @@ function DashboardUsuario({
   const [mostrarModalReserva, setMostrarModalReserva] = useState(false);
   const [reservaConfirmada, setReservaConfirmada] = useState(null);
 
+  /*
+    Turnos fijos del usuario.
+    Se consultan desde GET /turno-fijo/mios y se muestran sin mezclar
+    esta información con las reservas normales.
+  */
+  const [turnosFijosUsuario, setTurnosFijosUsuario] = useState([]);
+  const [cargandoTurnosFijosUsuario, setCargandoTurnosFijosUsuario] = useState(false);
+  const [refrescoTurnosFijosUsuario, setRefrescoTurnosFijosUsuario] = useState(0);
+  const [eliminandoTurnoFijoId, setEliminandoTurnoFijoId] = useState(null);
+
   useEffect(() => {
     if (!torneoSeleccionado) return undefined;
 
@@ -1121,6 +1252,60 @@ function DashboardUsuario({
       document.body.style.overflow = overflowAnterior;
     };
   }, [torneoSeleccionado]);
+
+  /*
+    Carga el historial/estado de los turnos fijos del usuario autenticado.
+    Incluye pendientes, activos y rechazados.
+  */
+  useEffect(() => {
+    let activo = true;
+    const controller = new AbortController();
+
+    const cargarMisTurnosFijos = async () => {
+      setCargandoTurnosFijosUsuario(true);
+
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_URL}/turno-fijo/mios`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `No se pudieron cargar tus turnos fijos. Error HTTP ${response.status}.`
+          );
+        }
+
+        const data = await response.json();
+
+        if (activo) {
+          setTurnosFijosUsuario(Array.isArray(data) ? data : []);
+        }
+      } catch (error) {
+        if (error?.name !== 'AbortError') {
+          console.error('Error al cargar mis turnos fijos:', error);
+
+          if (activo) {
+            setTurnosFijosUsuario([]);
+          }
+        }
+      } finally {
+        if (activo) {
+          setCargandoTurnosFijosUsuario(false);
+        }
+      }
+    };
+
+    cargarMisTurnosFijos();
+
+    return () => {
+      activo = false;
+      controller.abort();
+    };
+  }, [usuario, refrescoTurnosFijosUsuario]);
 
   /*
     Estados para el menú de los tres puntos de cada reserva.
@@ -1595,6 +1780,29 @@ function DashboardUsuario({
     setHorarioSeleccionado(null);
   };
 
+
+  const obtenerHoraFinTurno = (horaInicio) => {
+    const horaFinConfigurada = horaFinPorInicio[horaInicio];
+
+    if (horaFinConfigurada) {
+      return horaFinConfigurada;
+    }
+
+    const inicioMinutos = convertirHoraAMinutos(horaInicio);
+
+    if (inicioMinutos === null) {
+      return null;
+    }
+
+    const finMinutos = inicioMinutos + 60;
+    const horasFin = Math.floor(finMinutos / 60);
+    const minutosFin = finMinutos % 60;
+
+    return `${String(horasFin).padStart(2, '0')}:${String(
+      minutosFin
+    ).padStart(2, '0')}`;
+  };
+
   /*
     Indica si una ocupación del backend se superpone con el turno seleccionado.
 
@@ -1645,7 +1853,8 @@ function DashboardUsuario({
     }
 
     const inicioTurno = convertirHoraAMinutos(hora);
-    const finTurno = inicioTurno === null ? null : inicioTurno + 60;
+    const horaFinTurno = obtenerHoraFinTurno(hora);
+    const finTurno = convertirHoraAMinutos(horaFinTurno);
 
     const inicioOcupacion = convertirHoraAMinutos(
       ocupacion.hora ?? ocupacion.hora_inicio
@@ -1743,6 +1952,604 @@ function DashboardUsuario({
     }
 
     setHorarioSeleccionado(hora);
+  };
+
+  const obtenerTextoEstadoTurnoFijo = (estado) => {
+    if (estado === 'activo') return 'Activo';
+    if (estado === 'pendiente') return 'Pendiente';
+    if (estado === 'rechazado') return 'Rechazado';
+    if (estado === 'cancelado') return 'Cancelado';
+
+    return estado || 'Sin estado';
+  };
+
+  const obtenerClaseEstadoTurnoFijo = (estado) => {
+    if (estado === 'activo') return 'status status--confirmed';
+    if (estado === 'pendiente') return 'status status--pending';
+
+    return 'status status--blocked';
+  };
+
+  const verDetalleTurnoFijo = async (turno) => {
+    if (!turno) return;
+
+    const dia = NOMBRES_DIAS_TURNO_FIJO[Number(turno.dia_semana)] || 'Día';
+    const horaInicio = normalizarHoraParaComparar(turno.hora_inicio) || '—';
+    const horaFin = turno.hora_fin
+      ? normalizarHoraParaComparar(turno.hora_fin)
+      : null;
+
+    const alternativas = Array.isArray(turno.alternativas)
+      ? turno.alternativas
+      : [];
+
+    const alternativasHtml = alternativas.length
+      ? `
+        <div style="margin-top:16px;text-align:left;">
+          <strong>Alternativas propuestas</strong>
+          <ul style="margin:8px 0 0;padding-left:20px;">
+            ${alternativas
+              .map((alternativa) => {
+                const nombreDia =
+                  NOMBRES_DIAS_TURNO_FIJO[
+                    Number(alternativa.dia_semana)
+                  ] || 'Día';
+
+                const inicio =
+                  normalizarHoraParaComparar(alternativa.hora_inicio) || '—';
+
+                const fin =
+                  normalizarHoraParaComparar(alternativa.hora_fin) || '—';
+
+                return `<li>${nombreDia}: ${inicio} a ${fin} hs</li>`;
+              })
+              .join('')}
+          </ul>
+        </div>
+      `
+      : '';
+
+    const motivoHtml = turno.motivo_rechazo
+      ? `
+        <div style="margin-top:16px;text-align:left;">
+          <strong>Motivo</strong>
+          <p style="margin:6px 0 0;">${String(turno.motivo_rechazo)}</p>
+        </div>
+      `
+      : '';
+
+    await Swal.fire({
+      icon:
+        turno.estado === 'activo'
+          ? 'success'
+          : turno.estado === 'rechazado'
+            ? 'info'
+            : 'question',
+      title: 'Turno fijo',
+      html: `
+        <div style="text-align:left;line-height:1.5;">
+          <p style="margin:0 0 6px;"><strong>${turno.deporte?.nombre_deporte || 'Deporte'}</strong></p>
+          <p style="margin:0 0 6px;">${turno.club?.nombre_club || 'Club'}</p>
+          <p style="margin:0 0 6px;">
+            ${dia} · ${horaInicio}${horaFin ? ` a ${horaFin}` : ''} hs
+          </p>
+          ${
+            turno.cancha?.nombre_cancha
+              ? `<p style="margin:0;">${turno.cancha.nombre_cancha}</p>`
+              : '<p style="margin:0;">Cancha a asignar por el club</p>'
+          }
+          ${motivoHtml}
+          ${alternativasHtml}
+        </div>
+      `,
+      confirmButtonText: 'Aceptar',
+      customClass: {
+        popup: 'cy-alert-popup',
+        title: 'cy-alert-title',
+        htmlContainer: 'cy-alert-text',
+        confirmButton: 'cy-alert-button',
+      },
+    });
+  };
+
+  const eliminarTurnoFijoRechazado = async (turno) => {
+    if (!turno?.id_turno_fijo || turno.estado !== 'rechazado') return;
+
+    const confirmacion = await Swal.fire({
+      icon: 'warning',
+      title: 'Eliminar solicitud rechazada',
+      text: 'La solicitud desaparecerá de Mis turnos fijos. Esta acción no se puede deshacer.',
+      showCancelButton: true,
+      confirmButtonText: 'Sí, eliminar',
+      cancelButtonText: 'Volver',
+      reverseButtons: true,
+      customClass: {
+        popup: 'cy-alert-popup',
+        title: 'cy-alert-title',
+        htmlContainer: 'cy-alert-text',
+        confirmButton: 'cy-alert-button cy-alert-button--error',
+      },
+    });
+
+    if (!confirmacion.isConfirmed) return;
+
+    setEliminandoTurnoFijoId(turno.id_turno_fijo);
+
+    try {
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(
+        `${API_URL}/turno-fijo/${turno.id_turno_fijo}/rechazado`,
+        {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const mensaje = Array.isArray(data?.message)
+          ? data.message.join(' ')
+          : data?.message ||
+            'No pudimos eliminar la solicitud rechazada.';
+
+        throw new Error(mensaje);
+      }
+
+      setTurnosFijosUsuario((prev) =>
+        prev.filter(
+          (item) =>
+            Number(item.id_turno_fijo) !==
+            Number(turno.id_turno_fijo)
+        )
+      );
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Solicitud eliminada',
+        text: 'La solicitud rechazada fue quitada de tu listado.',
+        confirmButtonText: 'Aceptar',
+        customClass: {
+          popup: 'cy-alert-popup',
+          title: 'cy-alert-title',
+          htmlContainer: 'cy-alert-text',
+          confirmButton: 'cy-alert-button',
+        },
+      });
+    } catch (error) {
+      console.error(
+        'Error al eliminar turno fijo rechazado:',
+        error
+      );
+
+      mostrarError(
+        'No pudimos eliminar la solicitud',
+        error?.message ||
+          'Ocurrió un error al eliminar el turno fijo rechazado.'
+      );
+    } finally {
+      setEliminandoTurnoFijoId(null);
+    }
+  };
+
+  /*
+    Resuelve el id real del deporte para solicitar un turno fijo.
+    Priorizamos los datos reales de la cancha/club recibidos del backend.
+    Si esos objetos no traen el id, intentamos consultar el catálogo de deportes.
+    No usamos a ciegas el id de la constante visual DEPORTES.
+  */
+  const resolverIdDeporteTurnoFijo = async () => {
+    const idCanchaSeleccionada =
+      canchaSeleccionada?.id ?? canchaSeleccionada?.id_cancha ?? null;
+
+    const canchaReal = clubActual?.detallesCanchas?.find((cancha) => {
+      const idCancha = cancha?.id ?? cancha?.id_cancha ?? null;
+
+      return (
+        idCanchaSeleccionada !== null &&
+        idCancha !== null &&
+        String(idCancha) === String(idCanchaSeleccionada)
+      );
+    });
+
+    const candidatos = [
+      canchaSeleccionada?.id_deporte,
+      canchaSeleccionada?.idDeporte,
+      canchaSeleccionada?.deporteId,
+      canchaSeleccionada?.deporte?.id_deporte,
+      canchaSeleccionada?.deporte?.id,
+      canchaReal?.id_deporte,
+      canchaReal?.idDeporte,
+      canchaReal?.deporteId,
+      canchaReal?.deporte?.id_deporte,
+      canchaReal?.deporte?.id,
+    ];
+
+    const idDirecto = candidatos
+      .map((valor) => Number(valor))
+      .find((valor) => Number.isInteger(valor) && valor > 0);
+
+    if (idDirecto) return idDirecto;
+
+    const token = localStorage.getItem('token');
+    const rutasCatalogo = ['/deporte', '/deportes'];
+
+    for (const ruta of rutasCatalogo) {
+      try {
+        const response = await fetch(apiUrl(ruta), {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) continue;
+
+        const data = await response.json();
+        const lista = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.deportes)
+            ? data.deportes
+            : [];
+
+        const deporteEncontrado = lista.find((deporte) => {
+          const nombre =
+            deporte?.nombre_deporte ??
+            deporte?.nombre ??
+            deporte?.deporte ??
+            '';
+
+          return (
+            normalizarTexto(nombre) ===
+            normalizarTexto(deporteSeleccionado)
+          );
+        });
+
+        const idEncontrado = Number(
+          deporteEncontrado?.id_deporte ??
+          deporteEncontrado?.id ??
+          deporteEncontrado?.idDeporte
+        );
+
+        if (Number.isInteger(idEncontrado) && idEncontrado > 0) {
+          return idEncontrado;
+        }
+      } catch (error) {
+        console.warn(
+          `No se pudo consultar el catálogo de deportes en ${ruta}:`,
+          error
+        );
+      }
+    }
+
+    return null;
+  };
+
+  /*
+    Carga todos los turnos configurados de la cancha seleccionada para poder
+    ofrecer días y horarios válidos al solicitar un turno fijo.
+
+    Si la cancha nunca tuvo configuración propia, conserva el comportamiento
+    histórico: todos los días, de 09:00 a 22:00, con turnos de 60 minutos.
+  */
+  const cargarOpcionesTurnoFijo = async () => {
+    const idCancha =
+      canchaSeleccionada?.id ?? canchaSeleccionada?.id_cancha ?? null;
+
+    if (!idCancha) {
+      throw new Error('No pudimos identificar la cancha seleccionada.');
+    }
+
+    const token = localStorage.getItem('token');
+    const response = await fetch(
+      `${API_URL}/disponibilidad/cancha/${idCancha}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        'No pudimos consultar los horarios habilitados para esta cancha.'
+      );
+    }
+
+    const data = await response.json();
+
+    if (!Array.isArray(data) || data.length === 0) {
+      return Array.from({ length: 7 }, (_, diaSemana) =>
+        HORARIOS.map((turno) => {
+          const horaInicio = turno.hora;
+          const inicioMinutos = convertirHoraAMinutos(horaInicio);
+          const finMinutos = inicioMinutos + 60;
+          const horasFin = Math.floor(finMinutos / 60);
+          const minutosFin = finMinutos % 60;
+
+          return {
+            dia_semana: diaSemana,
+            hora_inicio: horaInicio,
+            hora_fin: `${String(horasFin).padStart(2, '0')}:${String(
+              minutosFin
+            ).padStart(2, '0')}`,
+          };
+        })
+      ).flat();
+    }
+
+    return data
+      .map((item) => ({
+        dia_semana: Number(item?.dia_semana),
+        hora_inicio: normalizarHoraParaComparar(item?.hora_inicio),
+        hora_fin: normalizarHoraParaComparar(item?.hora_fin),
+      }))
+      .filter(
+        (item) =>
+          Number.isInteger(item.dia_semana) &&
+          item.dia_semana >= 0 &&
+          item.dia_semana <= 6 &&
+          item.hora_inicio
+      );
+  };
+
+  /*
+    Abre el flujo de solicitud de turno fijo sin alterar el wizard normal.
+    El usuario elige día + hora; la cancha definitiva la asignará el club
+    cuando apruebe la solicitud.
+  */
+  const solicitarTurnoFijo = async () => {
+    if (!canchaSeleccionada || !clubActual || !deporteSeleccionado) {
+      mostrarError(
+        'Faltan datos',
+        'Primero elegí el deporte y una cancha para continuar.'
+      );
+      return;
+    }
+
+    const idClub = Number(
+      canchaSeleccionada?.clubId ??
+      canchaSeleccionada?.id_club ??
+      clubActual?.id ??
+      clubActual?.id_club
+    );
+
+    if (!Number.isInteger(idClub) || idClub <= 0) {
+      mostrarError(
+        'Club inválido',
+        'No pudimos identificar el club seleccionado.'
+      );
+      return;
+    }
+
+    Swal.fire({
+      title: 'Preparando turnos disponibles...',
+      text: 'Estamos consultando los días y horarios habilitados.',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      showConfirmButton: false,
+      customClass: {
+        popup: 'cy-alert-popup',
+        title: 'cy-alert-title',
+        htmlContainer: 'cy-alert-text',
+      },
+      didOpen: () => {
+        Swal.showLoading();
+      },
+    });
+
+    try {
+      const [idDeporte, opciones] = await Promise.all([
+        resolverIdDeporteTurnoFijo(),
+        cargarOpcionesTurnoFijo(),
+      ]);
+
+      if (!idDeporte) {
+        throw new Error(
+          'No pudimos identificar el deporte seleccionado. Reintentá en unos segundos.'
+        );
+      }
+
+      if (!opciones.length) {
+        Swal.close();
+        mostrarError(
+          'Sin horarios habilitados',
+          'La cancha seleccionada no tiene días ni horarios habilitados para solicitar un turno fijo.'
+        );
+        return;
+      }
+
+      const diasDisponiblesTurnoFijo = [
+        ...new Set(opciones.map((item) => Number(item.dia_semana))),
+      ].sort((a, b) => a - b);
+
+      const opcionesDiasHtml = diasDisponiblesTurnoFijo
+        .map(
+          (dia) =>
+            `<option value="${dia}">${NOMBRES_DIAS_TURNO_FIJO[dia]}</option>`
+        )
+        .join('');
+
+      const resultado = await Swal.fire({
+        icon: 'question',
+        title: 'Solicitar turno fijo',
+        html: `
+          <div style="text-align:left;">
+            <p style="margin:0 0 14px;">
+              Elegí el día y horario que te gustaría mantener todas las semanas.
+            </p>
+
+            <label for="turno-fijo-dia" style="display:block;font-weight:700;margin-bottom:6px;">
+              Día de la semana
+            </label>
+            <select
+              id="turno-fijo-dia"
+              class="swal2-select"
+              style="display:block;width:100%;margin:0 0 16px;"
+            >
+              ${opcionesDiasHtml}
+            </select>
+
+            <label for="turno-fijo-hora" style="display:block;font-weight:700;margin-bottom:6px;">
+              Horario
+            </label>
+            <select
+              id="turno-fijo-hora"
+              class="swal2-select"
+              style="display:block;width:100%;margin:0;"
+            ></select>
+
+            <small style="display:block;margin-top:14px;line-height:1.45;">
+              La cancha definitiva será asignada por el club cuando apruebe la solicitud.
+            </small>
+          </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: 'Enviar solicitud',
+        cancelButtonText: 'Cancelar',
+        reverseButtons: true,
+        customClass: {
+          popup: 'cy-alert-popup',
+          title: 'cy-alert-title',
+          htmlContainer: 'cy-alert-text',
+          confirmButton: 'cy-alert-button',
+        },
+        didOpen: () => {
+          const popup = Swal.getPopup();
+          const selectDia = popup?.querySelector('#turno-fijo-dia');
+          const selectHora = popup?.querySelector('#turno-fijo-hora');
+
+          const actualizarHorarios = () => {
+            if (!selectDia || !selectHora) return;
+
+            const diaSeleccionado = Number(selectDia.value);
+            const horariosDelDia = [
+              ...new Set(
+                opciones
+                  .filter(
+                    (item) =>
+                      Number(item.dia_semana) === diaSeleccionado
+                  )
+                  .map((item) => item.hora_inicio)
+                  .filter(Boolean)
+              ),
+            ].sort();
+
+            selectHora.innerHTML = horariosDelDia
+              .map(
+                (hora) =>
+                  `<option value="${hora}">${hora} hs</option>`
+              )
+              .join('');
+          };
+
+          actualizarHorarios();
+          selectDia?.addEventListener('change', actualizarHorarios);
+        },
+        preConfirm: () => {
+          const popup = Swal.getPopup();
+          const selectDia = popup?.querySelector('#turno-fijo-dia');
+          const selectHora = popup?.querySelector('#turno-fijo-hora');
+
+          const diaSemana = Number(selectDia?.value);
+          const horaInicio = String(selectHora?.value || '').trim();
+
+          if (
+            !Number.isInteger(diaSemana) ||
+            diaSemana < 0 ||
+            diaSemana > 6 ||
+            !horaInicio
+          ) {
+            Swal.showValidationMessage(
+              'Seleccioná un día y un horario válidos.'
+            );
+            return false;
+          }
+
+          return {
+            dia_semana: diaSemana,
+            hora_inicio: horaInicio,
+          };
+        },
+      });
+
+      if (!resultado.isConfirmed || !resultado.value) return;
+
+      Swal.fire({
+        title: 'Enviando solicitud...',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        customClass: {
+          popup: 'cy-alert-popup',
+          title: 'cy-alert-title',
+          htmlContainer: 'cy-alert-text',
+        },
+        didOpen: () => {
+          Swal.showLoading();
+        },
+      });
+
+      const token = localStorage.getItem('token');
+      const response = await fetch(
+        `${API_URL}/turno-fijo/solicitudes`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            id_club: idClub,
+            id_deporte: idDeporte,
+            dia_semana: resultado.value.dia_semana,
+            hora_inicio: resultado.value.hora_inicio,
+          }),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const mensaje = Array.isArray(data?.message)
+          ? data.message.join(' ')
+          : data?.message ||
+            'No pudimos enviar la solicitud de turno fijo.';
+
+        throw new Error(mensaje);
+      }
+
+      setRefrescoTurnosFijosUsuario((valor) => valor + 1);
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Solicitud enviada',
+        text:
+          'El club recibió tu solicitud de turno fijo. Podrás consultar su estado en Mis turnos fijos.',
+        confirmButtonText: 'Aceptar',
+        customClass: {
+          popup: 'cy-alert-popup',
+          title: 'cy-alert-title',
+          htmlContainer: 'cy-alert-text',
+          confirmButton: 'cy-alert-button',
+        },
+      });
+    } catch (error) {
+      Swal.close();
+
+      console.error(
+        'Error al solicitar turno fijo:',
+        error
+      );
+
+      mostrarError(
+        'No pudimos enviar la solicitud',
+        error?.message ||
+          'Ocurrió un error al solicitar el turno fijo.'
+      );
+    }
   };
 
   /*
@@ -2019,12 +2826,22 @@ function DashboardUsuario({
 
     const fechaSQL = normalizarFechaParaComparar(fechaSeleccionada);
 
+    const horaFinSeleccionada = obtenerHoraFinTurno(horarioSeleccionado);
+
+    if (!horaFinSeleccionada) {
+      mostrarError(
+        'Horario inválido',
+        'No pudimos determinar la hora de finalización de este turno.'
+      );
+      return;
+    }
+
     const reservaDTO = {
       id_usuario: usuario.id_usuario,
       id_cancha: canchaSeleccionada.id ?? canchaSeleccionada.id_cancha,
       fecha: fechaSQL,
       hora_inicio: `${horarioSeleccionado}:00`,
-      hora_fin: `${parseInt(horarioSeleccionado.split(':')[0]) + 1}:00:00`,
+      hora_fin: `${horaFinSeleccionada}:00`,
       monto_total: canchaSeleccionada.precio || 0,
       estado: 'confirmada',
     };
@@ -2802,6 +3619,32 @@ function DashboardUsuario({
                           </p>
                         </div>
 
+                        {!reservaEnEdicion && (
+                          <section
+                            className="tournament-context"
+                            aria-label="Solicitud de turno fijo"
+                          >
+                            <div className="tournament-context__header">
+                              <div>
+                                <span className="stage-kicker">Turno fijo</span>
+                                <h3>¿Querés solicitar un turno fijo?</h3>
+                                <p>
+                                  Elegí un día y horario semanal. El club revisará
+                                  tu solicitud y asignará la cancha al aprobarla.
+                                </p>
+                              </div>
+
+                              <button
+                                type="button"
+                                className="club-card__select"
+                                onClick={solicitarTurnoFijo}
+                              >
+                                Solicitar turno fijo
+                              </button>
+                            </div>
+                          </section>
+                        )}
+
                         <div className="date-selector date-selector--large">
                           <div className="date-selector__month">
                             <button
@@ -2871,82 +3714,88 @@ function DashboardUsuario({
                         )}
 
                         <div className="time-grid time-grid--large">
-                          {horariosDeCancha.length > 0 ? (
-                            horariosDeCancha.map((hora) => {
-                              const horarioPasado = esHorarioPasado(
-                                fechaSeleccionada,
-                                hora
-                              );
-                              const horarioOcupado = esHorarioOcupado(hora);
-                              const horarioBloqueado =
-                                cargandoReservasDelServidor ||
-                                Boolean(errorDisponibilidad) ||
-                                horarioPasado ||
-                                horarioOcupado;
-
-                              const textoDisponibilidad = cargandoReservasDelServidor
-                                ? 'Verificando'
-                                : errorDisponibilidad
-                                  ? 'Sin verificar'
-                                  : horarioOcupado
-                                    ? 'No disponible'
-                                    : horarioPasado
-                                      ? 'No disponible'
-                                      : '';
-
-                              const claseEstadoHorario = horarioOcupado
-                                ? ' time-card--occupied'
-                                : horarioPasado
-                                  ? ' time-card--past'
-                                  : errorDisponibilidad
-                                    ? ' time-card--verification-error'
-                                    : cargandoReservasDelServidor
-                                      ? ' time-card--checking'
-                                      : '';
-
-                              return (
-                                <button
-                                  key={hora}
-                                  type="button"
-                                  disabled={horarioBloqueado}
-                                  className={
-                                    horarioSeleccionado === hora
-                                      ? 'time-card time-card--large selected'
-                                      : `time-card time-card--large${claseEstadoHorario}`
-                                  }
-                                  onClick={() => seleccionarHorario(hora)}
-                                  aria-label={
-                                    textoDisponibilidad
-                                      ? `${hora} - ${textoDisponibilidad}`
-                                      : `${hora} - disponible`
-                                  }
-                                >
-                                  <span className="time-card__hour">{hora}</span>
-                                  {textoDisponibilidad && (
-                                    <small className="time-card__status">
-                                      {textoDisponibilidad}
-                                    </small>
-                                  )}
-                                </button>
-                              );
-                            })
-                          ) : (
+                          {cargandoHorariosCancha ? (
                             <div className="empty-clubs-message">
                               Cargando horarios disponibles...
                             </div>
+                          ) : horariosDeCancha.length > 0 ? (
+                            <>
+                              {horariosDeCancha.map((hora) => {
+                                const horarioPasado = esHorarioPasado(
+                                  fechaSeleccionada,
+                                  hora
+                                );
+                                const horarioOcupado = esHorarioOcupado(hora);
+                                const horarioBloqueado =
+                                  cargandoReservasDelServidor ||
+                                  Boolean(errorDisponibilidad) ||
+                                  horarioPasado ||
+                                  horarioOcupado;
+
+                                const textoDisponibilidad = cargandoReservasDelServidor
+                                  ? 'Verificando'
+                                  : errorDisponibilidad
+                                    ? 'Sin verificar'
+                                    : horarioOcupado
+                                      ? 'No disponible'
+                                      : horarioPasado
+                                        ? 'No disponible'
+                                        : '';
+
+                                const claseEstadoHorario = horarioOcupado
+                                  ? ' time-card--occupied'
+                                  : horarioPasado
+                                    ? ' time-card--past'
+                                    : errorDisponibilidad
+                                      ? ' time-card--verification-error'
+                                      : cargandoReservasDelServidor
+                                        ? ' time-card--checking'
+                                        : '';
+
+                                return (
+                                  <button
+                                    key={hora}
+                                    type="button"
+                                    disabled={horarioBloqueado}
+                                    className={
+                                      horarioSeleccionado === hora
+                                        ? 'time-card time-card--large selected'
+                                        : `time-card time-card--large${claseEstadoHorario}`
+                                    }
+                                    onClick={() => seleccionarHorario(hora)}
+                                    aria-label={
+                                      textoDisponibilidad
+                                        ? `${hora} - ${textoDisponibilidad}`
+                                        : `${hora} - disponible`
+                                    }
+                                  >
+                                    <span className="time-card__hour">{hora}</span>
+                                    {textoDisponibilidad && (
+                                      <small className="time-card__status">
+                                        {textoDisponibilidad}
+                                      </small>
+                                    )}
+                                  </button>
+                                );
+                              })}
+
+                              <div className="time-grid__legend">
+                                <span>
+                                  <i className="legend-dot available" />
+                                  Disponible
+                                </span>
+
+                                <span>
+                                  <i className="legend-dot unavailable" />
+                                  No disponible
+                                </span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="empty-clubs-message">
+                              No hay turnos habilitados para este día.
+                            </div>
                           )}
-
-                          <div className="time-grid__legend">
-                            <span>
-                              <i className="legend-dot available" />
-                              Disponible
-                            </span>
-
-                            <span>
-                              <i className="legend-dot unavailable" />
-                              No disponible
-                            </span>
-                          </div>
                         </div>
                       </div>
                     )}
@@ -3182,6 +4031,141 @@ function DashboardUsuario({
                       <strong>No tenés reservas activas</strong>
                       <small>
                         Cuando confirmes un nuevo turno, va a aparecer acá.
+                      </small>
+                    </div>
+                  )}
+                </div>
+
+                <h3 className="reservations-panel__subtitle">
+                  Mis turnos fijos
+                </h3>
+
+                <div className="reservations-list">
+                  {cargandoTurnosFijosUsuario ? (
+                    <div className="reservations-empty">
+                      <strong>Cargando turnos fijos...</strong>
+                    </div>
+                  ) : turnosFijosUsuario.length > 0 ? (
+                    turnosFijosUsuario.map((turno) => {
+                      const nombreDia =
+                        NOMBRES_DIAS_TURNO_FIJO[
+                          Number(turno.dia_semana)
+                        ] || 'Día';
+
+                      const horaInicio =
+                        normalizarHoraParaComparar(
+                          turno.hora_inicio
+                        ) || '—';
+
+                      const horaFin = turno.hora_fin
+                        ? normalizarHoraParaComparar(
+                            turno.hora_fin
+                          )
+                        : null;
+
+                      return (
+                        <article
+                          key={`turno-fijo-${turno.id_turno_fijo}`}
+                          className="reservation-card"
+                        >
+                          <div className="reservation-card__date">
+                            <small>FIJO</small>
+                            <strong>
+                              {nombreDia.slice(0, 3).toUpperCase()}
+                            </strong>
+                            <small>
+                              {horaInicio}
+                            </small>
+                          </div>
+
+                          <div className="reservation-card__info">
+                            <strong>
+                              {horaInicio}
+                              {horaFin ? ` a ${horaFin}` : ' hs'}
+                            </strong>
+                            <p>
+                              {turno.deporte?.nombre_deporte || 'Deporte'} ·{' '}
+                              {turno.club?.nombre_club || 'Club'}
+                            </p>
+                            <small>
+                              {turno.cancha?.nombre_cancha ||
+                                'Cancha a asignar'}
+                            </small>
+                          </div>
+
+                          <div className="reservation-card__actions">
+                            <span
+                              className={obtenerClaseEstadoTurnoFijo(
+                                turno.estado
+                              )}
+                            >
+                              {obtenerTextoEstadoTurnoFijo(
+                                turno.estado
+                              )}
+                            </span>
+
+                            {turno.estado === 'pendiente' && (
+                              <small>
+                                Esperando respuesta del club
+                              </small>
+                            )}
+
+                            {turno.estado === 'activo' && (
+                              <small>
+                                Se repite todas las semanas
+                              </small>
+                            )}
+
+                            {turno.estado === 'rechazado' && (
+                              <small>
+                                El club respondió tu solicitud
+                              </small>
+                            )}
+
+                            <button
+                              type="button"
+                              className="reservation-card__menu-button"
+                              onClick={() =>
+                                verDetalleTurnoFijo(turno)
+                              }
+                              title="Ver detalle del turno fijo"
+                            >
+                              <i className="bi bi-eye"></i>
+                            </button>
+
+                            {turno.estado === 'rechazado' && (
+                              <button
+                                type="button"
+                                className="reservation-card__menu-button"
+                                onClick={() =>
+                                  eliminarTurnoFijoRechazado(turno)
+                                }
+                                disabled={
+                                  Number(eliminandoTurnoFijoId) ===
+                                  Number(turno.id_turno_fijo)
+                                }
+                                title="Eliminar solicitud rechazada"
+                                aria-label="Eliminar solicitud rechazada"
+                              >
+                                <i
+                                  className={
+                                    Number(eliminandoTurnoFijoId) ===
+                                    Number(turno.id_turno_fijo)
+                                      ? 'bi bi-arrow-repeat'
+                                      : 'bi bi-trash'
+                                  }
+                                ></i>
+                              </button>
+                            )}
+                          </div>
+                        </article>
+                      );
+                    })
+                  ) : (
+                    <div className="reservations-empty">
+                      <strong>No tenés turnos fijos</strong>
+                      <small>
+                        Las solicitudes que hagas van a aparecer acá.
                       </small>
                     </div>
                   )}

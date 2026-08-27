@@ -1372,6 +1372,97 @@
   border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
+.pdc-schedule-editor-header {
+  margin-bottom: 18px;
+}
+
+.pdc-schedule-editor-header h4 {
+  margin: 0 0 5px;
+}
+
+.pdc-schedule-editor-header p {
+  margin: 0;
+  opacity: 0.8;
+}
+
+.pdc-schedule-config-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.pdc-schedule-days,
+.pdc-schedule-preview {
+  margin-top: 20px;
+}
+
+.pdc-schedule-section-label {
+  display: block;
+  margin-bottom: 10px;
+  font-weight: 700;
+}
+
+.pdc-schedule-days-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pdc-schedule-day {
+  cursor: pointer;
+}
+
+.pdc-schedule-day input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pdc-schedule-day span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  transition: 0.2s ease;
+}
+
+.pdc-schedule-day.is-active span {
+  background: #087bff;
+  border-color: #087bff;
+  color: #fff;
+}
+
+.pdc-schedule-preview-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pdc-schedule-preview-item {
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: rgba(8, 123, 255, 0.14);
+  border: 1px solid rgba(8, 123, 255, 0.35);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.pdc-schedule-invalid {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+@media (max-width: 768px) {
+  .pdc-schedule-config-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
 @media (max-width: 768px) {
   .pdc-settings-court-summary {
     flex-direction: column;
