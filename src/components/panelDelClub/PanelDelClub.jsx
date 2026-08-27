@@ -3958,6 +3958,641 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
   const obtenerCancelacionesUsuario = (reserva) =>
     reserva.id_usuario ? cancelacionesPorUsuario[reserva.id_usuario] || 0 : 0;
 
+  /* =========================================================
+     NUEVO TURNO FIJO CARGADO POR EL CLUB
+     Permite vincular un usuario que ya tuvo reservas en este club
+     o registrar un cliente externo/sin cuenta.
+  ========================================================= */
+
+  const escaparHtmlTurnoFijo = (valor) =>
+    String(valor ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+  const obtenerClientesRegistradosDelClub = () => {
+    const clientes = new Map();
+
+    reservasDelClub.forEach((reserva) => {
+      const idUsuario = Number(
+        reserva?.id_usuario ??
+        reserva?.usuario?.id_usuario ??
+        reserva?.usuario?.id
+      );
+
+      if (!Number.isInteger(idUsuario) || idUsuario <= 0) return;
+
+      const nombreDesdeUsuario = [
+        reserva?.usuario?.nombre_usuario,
+        reserva?.usuario?.apellido_usuario,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+
+      const nombre = String(
+        reserva?.cliente_nombre ||
+        nombreDesdeUsuario ||
+        `Usuario ${idUsuario}`
+      ).trim();
+
+      const telefono = String(
+        reserva?.cliente_telefono ||
+        reserva?.usuario?.telefono_usuario ||
+        ''
+      ).trim();
+
+      if (!clientes.has(idUsuario)) {
+        clientes.set(idUsuario, {
+          id_usuario: idUsuario,
+          nombre,
+          telefono,
+        });
+      }
+    });
+
+    return [...clientes.values()].sort((a, b) =>
+      a.nombre.localeCompare(b.nombre, 'es', {
+        sensitivity: 'base',
+      })
+    );
+  };
+
+  const handleNuevoTurnoFijoManual = async () => {
+    if (!idClubActual) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'Club no disponible',
+        text: 'No se pudo identificar el club.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+      return;
+    }
+
+    if (!canchas.length) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'No hay canchas disponibles',
+        text: 'El club necesita al menos una cancha activa para cargar un turno fijo.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'Sesión no disponible',
+        text: 'Cerrá sesión e ingresá nuevamente.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+      return;
+    }
+
+    let disponibilidadesPorCancha = {};
+
+    try {
+      const resultados = await Promise.all(
+        canchas.map(async (cancha) => {
+          const idCancha = Number(getCanchaId(cancha));
+
+          if (!idCancha) return [null, []];
+
+          const response = await fetch(
+            apiUrl(`/disponibilidad/cancha/${idCancha}`),
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+
+          if (!response.ok) {
+            return [idCancha, []];
+          }
+
+          const data = await response.json().catch(() => []);
+
+          return [idCancha, Array.isArray(data) ? data : []];
+        })
+      );
+
+      disponibilidadesPorCancha = Object.fromEntries(
+        resultados.filter(([idCancha]) => idCancha)
+      );
+    } catch (error) {
+      console.error(
+        'Error al cargar disponibilidades para turno fijo manual:',
+        error
+      );
+
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudieron cargar los horarios',
+        text: 'Intentá nuevamente en unos segundos.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+      return;
+    }
+
+    const canchasConHorarios = canchas.filter((cancha) => {
+      const idCancha = Number(getCanchaId(cancha));
+      return Array.isArray(disponibilidadesPorCancha[idCancha]) &&
+        disponibilidadesPorCancha[idCancha].length > 0;
+    });
+
+    if (!canchasConHorarios.length) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'No hay horarios configurados',
+        text: 'Configurá primero los días y horarios de al menos una cancha.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+      return;
+    }
+
+    const clientesRegistrados = obtenerClientesRegistradosDelClub();
+    const tipoClienteInicial =
+      clientesRegistrados.length > 0 ? 'registrado' : 'externo';
+
+    const opcionesClientes = clientesRegistrados
+      .map((cliente) => {
+        const detalleTelefono = cliente.telefono
+          ? ` · ${cliente.telefono}`
+          : '';
+
+        return `
+          <option value="${cliente.id_usuario}">
+            ${escaparHtmlTurnoFijo(cliente.nombre + detalleTelefono)}
+          </option>
+        `;
+      })
+      .join('');
+
+    const opcionesCanchas = canchasConHorarios
+      .map((cancha) => {
+        const idCancha = Number(getCanchaId(cancha));
+        const nombre =
+          cancha?.nombre_cancha ||
+          cancha?.nombre ||
+          `Cancha ${idCancha}`;
+        const deporte =
+          cancha?.id_deporte?.nombre_deporte ||
+          cancha?.deporte?.nombre_deporte ||
+          '';
+
+        return `
+          <option value="${idCancha}">
+            ${escaparHtmlTurnoFijo(
+              deporte ? `${nombre} · ${deporte}` : nombre
+            )}
+          </option>
+        `;
+      })
+      .join('');
+
+    const resultado = await Swal.fire({
+      icon: 'info',
+      title: 'Nuevo turno fijo',
+      width: 620,
+      html: `
+        <div style="text-align:left;line-height:1.4;">
+          <p style="margin:0 0 16px;color:#475569;">
+            Cargá un turno semanal desde el club. El sistema validará automáticamente
+            reservas, bloqueos y otros turnos fijos antes de activarlo.
+          </p>
+
+          <label
+            for="turno-fijo-manual-tipo-cliente"
+            style="display:block;font-weight:700;margin-bottom:6px;"
+          >
+            Cliente
+          </label>
+          <select
+            id="turno-fijo-manual-tipo-cliente"
+            class="swal2-select"
+            style="display:block;width:100%;margin:0 0 12px;"
+          >
+            ${clientesRegistrados.length > 0
+              ? '<option value="registrado">Usuario registrado que ya reservó en el club</option>'
+              : ''}
+            <option value="externo">Cliente externo / sin cuenta</option>
+          </select>
+
+          <div id="turno-fijo-manual-registrado">
+            <label
+              for="turno-fijo-manual-usuario"
+              style="display:block;font-weight:700;margin-bottom:6px;"
+            >
+              Usuario
+            </label>
+            <select
+              id="turno-fijo-manual-usuario"
+              class="swal2-select"
+              style="display:block;width:100%;margin:0 0 5px;"
+            >
+              ${opcionesClientes}
+            </select>
+            <small style="display:block;margin:0 0 14px;color:#64748b;">
+              Por privacidad, se muestran usuarios que ya tuvieron una reserva en este club.
+            </small>
+          </div>
+
+          <div id="turno-fijo-manual-externo">
+            <label
+              for="turno-fijo-manual-nombre"
+              style="display:block;font-weight:700;margin-bottom:6px;"
+            >
+              Nombre del cliente
+            </label>
+            <input
+              id="turno-fijo-manual-nombre"
+              type="text"
+              maxlength="160"
+              class="swal2-input"
+              placeholder="Ej: Juan Pérez"
+              style="display:block;width:100%;margin:0 0 12px;"
+            />
+
+            <label
+              for="turno-fijo-manual-telefono"
+              style="display:block;font-weight:700;margin-bottom:6px;"
+            >
+              Teléfono (opcional)
+            </label>
+            <input
+              id="turno-fijo-manual-telefono"
+              type="text"
+              maxlength="30"
+              class="swal2-input"
+              placeholder="Ej: 2983 123456"
+              style="display:block;width:100%;margin:0 0 14px;"
+            />
+          </div>
+
+          <label
+            for="turno-fijo-manual-cancha"
+            style="display:block;font-weight:700;margin-bottom:6px;"
+          >
+            Cancha
+          </label>
+          <select
+            id="turno-fijo-manual-cancha"
+            class="swal2-select"
+            style="display:block;width:100%;margin:0 0 12px;"
+          >
+            ${opcionesCanchas}
+          </select>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label
+                for="turno-fijo-manual-dia"
+                style="display:block;font-weight:700;margin-bottom:6px;"
+              >
+                Día
+              </label>
+              <select
+                id="turno-fijo-manual-dia"
+                class="swal2-select"
+                style="display:block;width:100%;margin:0;"
+              ></select>
+            </div>
+
+            <div>
+              <label
+                for="turno-fijo-manual-hora"
+                style="display:block;font-weight:700;margin-bottom:6px;"
+              >
+                Horario
+              </label>
+              <select
+                id="turno-fijo-manual-hora"
+                class="swal2-select"
+                style="display:block;width:100%;margin:0;"
+              ></select>
+            </div>
+          </div>
+
+          <label
+            for="turno-fijo-manual-fecha"
+            style="display:block;font-weight:700;margin:14px 0 6px;"
+          >
+            Comienza el
+          </label>
+          <input
+            id="turno-fijo-manual-fecha"
+            type="date"
+            class="swal2-input"
+            min="${obtenerFechaLocalISO()}"
+            style="display:block;width:100%;margin:0;"
+          />
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: 'Guardar turno fijo',
+      cancelButtonText: 'Volver',
+      confirmButtonColor: '#087bff',
+      cancelButtonColor: '#64748b',
+      reverseButtons: true,
+      didOpen: () => {
+        const popup = Swal.getPopup();
+        if (!popup) return;
+
+        const tipoClienteSelect = popup.querySelector(
+          '#turno-fijo-manual-tipo-cliente'
+        );
+        const bloqueRegistrado = popup.querySelector(
+          '#turno-fijo-manual-registrado'
+        );
+        const bloqueExterno = popup.querySelector(
+          '#turno-fijo-manual-externo'
+        );
+        const canchaSelect = popup.querySelector(
+          '#turno-fijo-manual-cancha'
+        );
+        const diaSelect = popup.querySelector(
+          '#turno-fijo-manual-dia'
+        );
+        const horaSelect = popup.querySelector(
+          '#turno-fijo-manual-hora'
+        );
+        const fechaInput = popup.querySelector(
+          '#turno-fijo-manual-fecha'
+        );
+
+        const actualizarTipoCliente = () => {
+          const esRegistrado =
+            tipoClienteSelect?.value === 'registrado';
+
+          if (bloqueRegistrado) {
+            bloqueRegistrado.style.display = esRegistrado
+              ? 'block'
+              : 'none';
+          }
+
+          if (bloqueExterno) {
+            bloqueExterno.style.display = esRegistrado
+              ? 'none'
+              : 'block';
+          }
+        };
+
+        const actualizarFecha = () => {
+          if (!fechaInput || !diaSelect?.value) return;
+
+          fechaInput.value = obtenerProximaFechaParaDiaSemana(
+            Number(diaSelect.value)
+          );
+        };
+
+        const actualizarHorarios = () => {
+          if (!horaSelect || !canchaSelect || !diaSelect) return;
+
+          const idCancha = Number(canchaSelect.value);
+          const diaSemana = Number(diaSelect.value);
+          const disponibilidades =
+            disponibilidadesPorCancha[idCancha] || [];
+
+          const horarios = disponibilidades
+            .filter(
+              (item) => Number(item.dia_semana) === diaSemana
+            )
+            .sort((a, b) =>
+              String(a.hora_inicio).localeCompare(
+                String(b.hora_inicio)
+              )
+            );
+
+          horaSelect.innerHTML = horarios
+            .map((item) => {
+              const inicio = normalizarHoraTurnoFijo(
+                item.hora_inicio
+              );
+              const fin = normalizarHoraTurnoFijo(
+                item.hora_fin
+              );
+
+              return `<option value="${inicio}">${inicio} a ${fin} hs</option>`;
+            })
+            .join('');
+        };
+
+        const actualizarDias = () => {
+          if (!diaSelect || !canchaSelect) return;
+
+          const idCancha = Number(canchaSelect.value);
+          const disponibilidades =
+            disponibilidadesPorCancha[idCancha] || [];
+
+          const dias = [
+            ...new Set(
+              disponibilidades.map((item) =>
+                Number(item.dia_semana)
+              )
+            ),
+          ].sort((a, b) => a - b);
+
+          diaSelect.innerHTML = dias
+            .map(
+              (dia) =>
+                `<option value="${dia}">${NOMBRES_DIAS_TURNO_FIJO[dia]}</option>`
+            )
+            .join('');
+
+          actualizarHorarios();
+          actualizarFecha();
+        };
+
+        if (tipoClienteSelect) {
+          tipoClienteSelect.value = tipoClienteInicial;
+          tipoClienteSelect.addEventListener(
+            'change',
+            actualizarTipoCliente
+          );
+        }
+
+        canchaSelect?.addEventListener('change', actualizarDias);
+        diaSelect?.addEventListener('change', () => {
+          actualizarHorarios();
+          actualizarFecha();
+        });
+
+        actualizarTipoCliente();
+        actualizarDias();
+      },
+      preConfirm: () => {
+        const popup = Swal.getPopup();
+        if (!popup) return false;
+
+        const tipoCliente = String(
+          popup.querySelector(
+            '#turno-fijo-manual-tipo-cliente'
+          )?.value || ''
+        );
+        const idUsuario = Number(
+          popup.querySelector('#turno-fijo-manual-usuario')
+            ?.value
+        );
+        const nombreCliente = String(
+          popup.querySelector('#turno-fijo-manual-nombre')
+            ?.value || ''
+        ).trim();
+        const telefonoCliente = String(
+          popup.querySelector('#turno-fijo-manual-telefono')
+            ?.value || ''
+        ).trim();
+        const idCancha = Number(
+          popup.querySelector('#turno-fijo-manual-cancha')
+            ?.value
+        );
+        const diaSemana = Number(
+          popup.querySelector('#turno-fijo-manual-dia')?.value
+        );
+        const horaInicio = String(
+          popup.querySelector('#turno-fijo-manual-hora')
+            ?.value || ''
+        );
+        const fechaInicio = String(
+          popup.querySelector('#turno-fijo-manual-fecha')
+            ?.value || ''
+        );
+
+        if (
+          !idCancha ||
+          !Number.isInteger(diaSemana) ||
+          diaSemana < 0 ||
+          diaSemana > 6 ||
+          !horaInicio ||
+          !fechaInicio
+        ) {
+          Swal.showValidationMessage(
+            'Completá cancha, día, horario y fecha de inicio.'
+          );
+          return false;
+        }
+
+        if (tipoCliente === 'registrado') {
+          if (!Number.isInteger(idUsuario) || idUsuario <= 0) {
+            Swal.showValidationMessage(
+              'Seleccioná un usuario registrado.'
+            );
+            return false;
+          }
+        } else if (nombreCliente.length < 2) {
+          Swal.showValidationMessage(
+            'Indicá el nombre del cliente.'
+          );
+          return false;
+        }
+
+        const [anio, mes, dia] =
+          fechaInicio.split('-').map(Number);
+        const diaFecha = new Date(
+          Date.UTC(anio, mes - 1, dia)
+        ).getUTCDay();
+
+        if (diaFecha !== diaSemana) {
+          Swal.showValidationMessage(
+            `La fecha de inicio debe ser un ${String(
+              NOMBRES_DIAS_TURNO_FIJO[diaSemana] || 'día'
+            ).toLowerCase()}.`
+          );
+          return false;
+        }
+
+        if (fechaInicio < obtenerFechaLocalISO()) {
+          Swal.showValidationMessage(
+            'La fecha de inicio no puede estar en el pasado.'
+          );
+          return false;
+        }
+
+        return {
+          id_cancha: idCancha,
+          dia_semana: diaSemana,
+          hora_inicio: horaInicio,
+          fecha_inicio: fechaInicio,
+          ...(tipoCliente === 'registrado'
+            ? { id_usuario: idUsuario }
+            : {
+              nombre_cliente: nombreCliente,
+              ...(telefonoCliente
+                ? { telefono_cliente: telefonoCliente }
+                : {}),
+            }),
+        };
+      },
+    });
+
+    if (!resultado.isConfirmed || !resultado.value) return;
+
+    try {
+      Swal.fire({
+        title: 'Guardando turno fijo...',
+        text: 'Estamos verificando que el horario esté disponible.',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        didOpen: () => {
+          Swal.showLoading();
+        },
+      });
+
+      const response = await fetch(apiUrl('/turno-fijo/manual'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(resultado.value),
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const mensaje = Array.isArray(data?.message)
+          ? data.message.join(' ')
+          : data?.message;
+
+        throw new Error(
+          mensaje || 'No se pudo registrar el turno fijo.'
+        );
+      }
+
+      await cargarTurnosFijosClub();
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Turno fijo guardado',
+        text: 'El turno quedó activo y ese horario se bloqueará todas las semanas.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+    } catch (error) {
+      console.error('Error al crear turno fijo manual:', error);
+
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo guardar el turno fijo',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    }
+  };
+
 
 
   return (
@@ -5388,6 +6023,16 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                       Incluye solicitudes aprobadas y clientes cargados por el club.
                     </small>
                   </div>
+
+                  <button
+                    type="button"
+                    className="pdc-light-button"
+                    onClick={handleNuevoTurnoFijoManual}
+                    disabled={cargandoTurnosFijos || !canchas.length}
+                  >
+                    <i className="bi bi-plus-circle"></i>
+                    Nuevo turno fijo
+                  </button>
                 </div>
 
                 {cargandoTurnosFijos ? (
