@@ -197,6 +197,208 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     club?.id ||
     null;
 
+  /*
+    Datos de contacto editables desde Configuración.
+    - telefono: se guarda tanto en el club como en el usuario dueño.
+    - email: corresponde al usuario dueño; también será su email de acceso.
+  */
+  const [contactoClub, setContactoClub] = useState({
+    telefono: '',
+    email: '',
+  });
+  const [guardandoContactoClub, setGuardandoContactoClub] = useState(false);
+
+  useEffect(() => {
+    setContactoClub({
+      telefono:
+        clubPrincipal?.telefono_club ||
+        club?.telefono_usuario ||
+        club?.telefono ||
+        '',
+      email:
+        club?.email_usuario ||
+        club?.email ||
+        clubPrincipal?.dueno?.email_usuario ||
+        clubPrincipal?.dueno?.email ||
+        '',
+    });
+  }, [
+    clubPrincipal?.telefono_club,
+    clubPrincipal?.dueno?.email_usuario,
+    clubPrincipal?.dueno?.email,
+    club?.telefono_usuario,
+    club?.telefono,
+    club?.email_usuario,
+    club?.email,
+  ]);
+
+  const handleGuardarContactoClub = async (e) => {
+    e.preventDefault();
+
+    if (!idClubActual) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'Club no disponible',
+        text: 'No se pudo identificar el club.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+      return;
+    }
+
+    const telefono = String(contactoClub.telefono || '').trim();
+    const email = String(contactoClub.email || '').trim().toLowerCase();
+
+    if (!/^[0-9+\-()\s]{6,20}$/.test(telefono)) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Teléfono inválido',
+        text: 'Ingresá un teléfono válido de entre 6 y 20 caracteres.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'Email inválido',
+        text: 'Ingresá un email válido.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+      return;
+    }
+
+    setGuardandoContactoClub(true);
+
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error(
+          'La sesión no está disponible. Cerrá sesión e ingresá nuevamente.'
+        );
+      }
+
+      const response = await fetch(
+        apiUrl(`/club/${idClubActual}/contacto`),
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            telefono,
+            email,
+          }),
+        }
+      );
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const mensaje = Array.isArray(data?.message)
+          ? data.message.join(' ')
+          : data?.message;
+
+        throw new Error(
+          mensaje || 'No se pudieron actualizar los datos de contacto.'
+        );
+      }
+
+      const telefonoGuardado =
+        data?.telefono ||
+        data?.telefono_club ||
+        data?.club?.telefono_club ||
+        telefono;
+
+      const emailGuardado =
+        data?.email ||
+        data?.email_usuario ||
+        data?.dueno?.email_usuario ||
+        email;
+
+      setContactoClub({
+        telefono: telefonoGuardado,
+        email: emailGuardado,
+      });
+
+      /*
+        App.jsx restaura la sesión visual desde localStorage('user').
+        Sincronizamos teléfono/email para que un F5 no vuelva a mostrar
+        los datos viejos.
+      */
+      try {
+        const rawUser = localStorage.getItem('user');
+
+        if (rawUser) {
+          const storedUser = JSON.parse(rawUser);
+
+          const updatedUser = {
+            ...storedUser,
+            email: emailGuardado,
+            email_usuario: emailGuardado,
+            telefono: telefonoGuardado,
+            telefono_usuario: telefonoGuardado,
+            ...(storedUser?.club
+              ? {
+                  club: {
+                    ...storedUser.club,
+                    telefono_club: telefonoGuardado,
+                    ...(storedUser.club?.dueno
+                      ? {
+                          dueno: {
+                            ...storedUser.club.dueno,
+                            email_usuario: emailGuardado,
+                            telefono_usuario: telefonoGuardado,
+                          },
+                        }
+                      : {}),
+                  },
+                }
+              : {}),
+          };
+
+          localStorage.setItem('user', JSON.stringify(updatedUser));
+        }
+      } catch (storageError) {
+        console.warn(
+          'Los datos se actualizaron, pero no se pudo sincronizar la sesión local:',
+          storageError
+        );
+      }
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Datos actualizados',
+        html: `
+          <p>El teléfono y el email fueron actualizados correctamente.</p>
+          <p style="margin-bottom:0"><strong>Importante:</strong> si cambiaste el email, usá el nuevo correo la próxima vez que inicies sesión.</p>
+        `,
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+    } catch (error) {
+      console.error('Error al actualizar contacto del club:', error);
+
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudieron guardar los datos',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    } finally {
+      setGuardandoContactoClub(false);
+    }
+  };
+
   const handleSolicitarBajaServicio = async () => {
     if (!idClubActual) {
       await Swal.fire({
@@ -5634,6 +5836,117 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
           <section className="pdc-settings-section">
             <div className="pdc-settings-container">
               <h2>Configuración del Club</h2>
+
+              {/* DATOS DE CONTACTO */}
+              <div className="pdc-settings-box">
+                <div style={{ marginBottom: '14px' }}>
+                  <span
+                    style={{
+                      display: 'inline-block',
+                      marginBottom: '6px',
+                      color: '#93c5fd',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      letterSpacing: '0.08em',
+                    }}
+                  >
+                    CONTACTO
+                  </span>
+
+                  <h3 style={{ marginBottom: '6px' }}>
+                    Datos de contacto
+                  </h3>
+
+                  <p
+                    className="pdc-settings-description"
+                    style={{ marginBottom: 0 }}
+                  >
+                    Actualizá el teléfono o WhatsApp y el email del dueño.
+                    El email también se utiliza para iniciar sesión y recibir
+                    notificaciones de DameCancha.
+                  </p>
+                </div>
+
+                <form onSubmit={handleGuardarContactoClub}>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns:
+                        'repeat(auto-fit, minmax(220px, 1fr))',
+                      gap: '14px',
+                      alignItems: 'end',
+                    }}
+                  >
+                    <div className="pdc-form-group">
+                      <label htmlFor="pdc-contacto-telefono">
+                        Teléfono / WhatsApp
+                      </label>
+                      <input
+                        id="pdc-contacto-telefono"
+                        type="tel"
+                        inputMode="tel"
+                        maxLength={20}
+                        placeholder="Ej: 2983415025"
+                        value={contactoClub.telefono}
+                        onChange={(e) =>
+                          setContactoClub((prev) => ({
+                            ...prev,
+                            telefono: e.target.value,
+                          }))
+                        }
+                        disabled={guardandoContactoClub}
+                        required
+                      />
+                    </div>
+
+                    <div className="pdc-form-group">
+                      <label htmlFor="pdc-contacto-email">
+                        Email
+                      </label>
+                      <input
+                        id="pdc-contacto-email"
+                        type="email"
+                        maxLength={150}
+                        placeholder="Ej: club@gmail.com"
+                        value={contactoClub.email}
+                        onChange={(e) =>
+                          setContactoClub((prev) => ({
+                            ...prev,
+                            email: e.target.value,
+                          }))
+                        }
+                        disabled={guardandoContactoClub}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'flex-end',
+                      marginTop: '14px',
+                    }}
+                  >
+                    <button
+                      type="submit"
+                      className="pdc-btn-add-cancha"
+                      disabled={guardandoContactoClub}
+                    >
+                      <i
+                        className={
+                          guardandoContactoClub
+                            ? 'bi bi-hourglass-split'
+                            : 'bi bi-check-circle'
+                        }
+                      ></i>
+                      {guardandoContactoClub
+                        ? 'Guardando...'
+                        : 'Guardar datos de contacto'}
+                    </button>
+                  </div>
+                </form>
+              </div>
 
               {/* Formulario para agregar canchas */}
               <div className="pdc-settings-box">

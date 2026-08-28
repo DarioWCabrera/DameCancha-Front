@@ -1,5 +1,5 @@
 import { API_URL, apiUrl, mediaUrl } from '../../config/api';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 import Swal from 'sweetalert2';
@@ -37,8 +37,118 @@ const CANCHAS_DISPONIBLES = [
   'Vóley',
   'Pádel',
   'Natación',
-  'Pelota Paleta',
+  'Golf',
 ];
+
+
+/*
+  Configuración de logos.
+  El backend acepta hasta 2 MB, por eso comprimimos un poco por debajo
+  para dejar margen al envío multipart/form-data.
+*/
+const LOGO_MAX_BACKEND_BYTES = 2 * 1024 * 1024;
+const LOGO_TARGET_BYTES = 1.8 * 1024 * 1024;
+const LOGO_MAX_ORIGINAL_BYTES = 15 * 1024 * 1024;
+const LOGO_MAX_DIMENSION = 1400;
+const LOGO_ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+
+const bytesToKb = (bytes = 0) => Math.max(1, Math.round(bytes / 1024));
+
+const cargarImagenDesdeArchivo = (file) =>
+  new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('No se pudo leer la imagen seleccionada.'));
+    };
+
+    image.src = objectUrl;
+  });
+
+const canvasToBlob = (canvas, type, quality) =>
+  new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), type, quality);
+  });
+
+/*
+  Reduce dimensiones grandes y convierte el logo a WEBP.
+  Si todavía supera el objetivo, baja progresivamente calidad y tamaño.
+*/
+const comprimirLogo = async (file) => {
+  const image = await cargarImagenDesdeArchivo(file);
+
+  let width = image.naturalWidth || image.width;
+  let height = image.naturalHeight || image.height;
+
+  if (!width || !height) {
+    throw new Error('La imagen seleccionada no tiene dimensiones válidas.');
+  }
+
+  const escalaInicial = Math.min(
+    1,
+    LOGO_MAX_DIMENSION / Math.max(width, height),
+  );
+
+  width = Math.max(1, Math.round(width * escalaInicial));
+  height = Math.max(1, Math.round(height * escalaInicial));
+
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  if (!ctx) {
+    throw new Error('Tu navegador no pudo procesar la imagen.');
+  }
+
+  let quality = 0.88;
+  let blob = null;
+
+  for (let intento = 0; intento < 10; intento += 1) {
+    canvas.width = width;
+    canvas.height = height;
+
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(image, 0, 0, width, height);
+
+    blob = await canvasToBlob(canvas, 'image/webp', quality);
+
+    if (!blob) {
+      throw new Error('No se pudo comprimir la imagen.');
+    }
+
+    if (blob.size <= LOGO_TARGET_BYTES) {
+      break;
+    }
+
+    if (quality > 0.58) {
+      quality -= 0.08;
+    } else {
+      width = Math.max(320, Math.round(width * 0.85));
+      height = Math.max(320, Math.round(height * 0.85));
+      quality = 0.72;
+    }
+  }
+
+  if (!blob || blob.size > LOGO_MAX_BACKEND_BYTES) {
+    throw new Error(
+      'No pudimos reducir suficientemente esta imagen. Probá con otra foto o logo.',
+    );
+  }
+
+  const nombreBase =
+    file.name.replace(/\.[^/.]+$/, '').trim() || 'logo-club';
+
+  return new File([blob], `${nombreBase}.webp`, {
+    type: 'image/webp',
+    lastModified: Date.now(),
+  });
+};
 
 /*
   Register
@@ -82,9 +192,8 @@ function Register({ onRegisterComplete, onCancelRegister }) {
   const [mostrarProvincias, setMostrarProvincias] = useState(false);
   const [mostrarCiudades, setMostrarCiudades] = useState(false);
   const [recaptchaToken, setRecaptchaToken] = useState(null);
-  const [mostrarPassword, setMostrarPassword] = useState(false);
-  const [mostrarConfirmPassword, setMostrarConfirmPassword] = useState(false);
-
+  const [procesandoLogo, setProcesandoLogo] = useState(false);
+  const logoInputRef = useRef(null);
 
   useEffect(() => {
     const loadProvincias = async () => {
@@ -166,17 +275,97 @@ function Register({ onRegisterComplete, onCancelRegister }) {
     'La contraseña debe tener al menos 8 caracteres, incluir una letra y un número.';
 
   /*
-    Actualiza inputs normales y el input file del logo.
-    Si el campo es archivo, guarda files[0].
-    Si no, guarda el value del input.
+    Actualiza inputs normales.
+    Para el logo:
+    - valida formato y tamaño original razonable;
+    - lo comprime automáticamente a WEBP;
+    - lo deja por debajo del límite de 2 MB del backend.
   */
-  const handleChange = (e) => {
+  const handleChange = async (e) => {
     const { id, name, value, files, type } = e.target;
     const fieldName = name || id;
 
+    if (type === 'file' && fieldName === 'logo') {
+      const archivoSeleccionado = files?.[0] || null;
+
+      if (!archivoSeleccionado) {
+        setFormData((prev) => ({
+          ...prev,
+          logo: null,
+        }));
+        return;
+      }
+
+      if (!LOGO_ALLOWED_TYPES.includes(archivoSeleccionado.type)) {
+        if (logoInputRef.current) {
+          logoInputRef.current.value = '';
+        }
+
+        setFormData((prev) => ({
+          ...prev,
+          logo: null,
+        }));
+
+        return Swal.fire({
+          icon: 'error',
+          title: 'Formato no permitido',
+          text: 'Seleccioná una imagen JPG, PNG o WEBP.',
+        });
+      }
+
+      if (archivoSeleccionado.size > LOGO_MAX_ORIGINAL_BYTES) {
+        if (logoInputRef.current) {
+          logoInputRef.current.value = '';
+        }
+
+        setFormData((prev) => ({
+          ...prev,
+          logo: null,
+        }));
+
+        return Swal.fire({
+          icon: 'error',
+          title: 'Imagen demasiado grande',
+          text: 'Para procesarla automáticamente, la imagen original no puede superar los 15 MB.',
+        });
+      }
+
+      setProcesandoLogo(true);
+
+      try {
+        const logoComprimido = await comprimirLogo(archivoSeleccionado);
+
+        setFormData((prev) => ({
+          ...prev,
+          logo: logoComprimido,
+        }));
+      } catch (error) {
+        if (logoInputRef.current) {
+          logoInputRef.current.value = '';
+        }
+
+        setFormData((prev) => ({
+          ...prev,
+          logo: null,
+        }));
+
+        Swal.fire({
+          icon: 'error',
+          title: 'No pudimos procesar el logo',
+          text:
+            error?.message ||
+            'Probá nuevamente con otra imagen JPG, PNG o WEBP.',
+        });
+      } finally {
+        setProcesandoLogo(false);
+      }
+
+      return;
+    }
+
     setFormData((prev) => ({
       ...prev,
-      [fieldName]: type === 'file' ? files[0] || null : value,
+      [fieldName]: value,
       ...(fieldName === 'provincia' && {
         ciudad: '',
       }),
@@ -189,6 +378,17 @@ function Register({ onRegisterComplete, onCancelRegister }) {
 
     if (fieldName === 'ciudad') {
       setMostrarCiudades(true);
+    }
+  };
+
+  const quitarLogo = () => {
+    setFormData((prev) => ({
+      ...prev,
+      logo: null,
+    }));
+
+    if (logoInputRef.current) {
+      logoInputRef.current.value = '';
     }
   };
 
@@ -216,6 +416,14 @@ function Register({ onRegisterComplete, onCancelRegister }) {
   */
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (procesandoLogo) {
+      return Swal.fire({
+        icon: 'info',
+        title: 'Procesando logo',
+        text: 'Esperá unos segundos a que terminemos de optimizar la imagen.',
+      });
+    }
 
     if (!recaptchaToken) {
       return Swal.fire({
@@ -339,6 +547,10 @@ function Register({ onRegisterComplete, onCancelRegister }) {
         logo: null,
         canchas: [],
       });
+
+      if (logoInputRef.current) {
+        logoInputRef.current.value = '';
+      }
 
       if (onRegisterComplete) {
         onRegisterComplete({ ...result, tipo: 'club' });
@@ -545,29 +757,53 @@ function Register({ onRegisterComplete, onCancelRegister }) {
 
                       <div className="upload-box__info">
                         <span>Formatos permitidos: JPG, PNG, WEBP</span>
-                        <span>Tamaño máximo: 2MB</span>
+                        <span>La imagen se optimiza automáticamente</span>
                       </div>
                     </div>
 
                     <div className="upload-box__bottom">
-                      <label htmlFor="logo" className="upload-box__button">
-                        Seleccionar archivo
+                      <label
+                        htmlFor="logo"
+                        className="upload-box__button"
+                        style={{
+                          opacity: procesandoLogo ? 0.65 : 1,
+                          pointerEvents: procesandoLogo ? 'none' : 'auto',
+                        }}
+                      >
+                        {procesandoLogo ? 'Procesando...' : 'Seleccionar archivo'}
                       </label>
 
                       <span className="upload-box__filename">
-                        {formData.logo
-                          ? formData.logo.name
-                          : 'Ningún archivo seleccionado'}
+                        {procesandoLogo
+                          ? 'Optimizando imagen...'
+                          : formData.logo
+                            ? `${formData.logo.name} · ${bytesToKb(formData.logo.size)} KB`
+                            : 'Ningún archivo seleccionado'}
                       </span>
+
+                      {formData.logo && !procesandoLogo && (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-danger ms-2"
+                          onClick={quitarLogo}
+                          title="Quitar imagen seleccionada"
+                          aria-label="Quitar imagen seleccionada"
+                        >
+                          <i className="bi bi-trash3 me-1"></i>
+                          Quitar
+                        </button>
+                      )}
                     </div>
 
                     <input
+                      ref={logoInputRef}
                       type="file"
                       id="logo"
                       name="logo"
                       accept="image/jpeg,image/png,image/webp"
                       onChange={handleChange}
                       className="upload-box__input"
+                      disabled={procesandoLogo}
                     />
 
                   </div>
@@ -576,84 +812,39 @@ function Register({ onRegisterComplete, onCancelRegister }) {
 
               {/* Contraseñas */}
               <div className="row mb-3">
-                <div className="col-md-6">
+                <div className="col-md-6 position-relative">
                   <label htmlFor="password" className="form-label">
                     Contraseña
                   </label>
-
-                  <div className="position-relative">
-                    <input
-                      type={mostrarPassword ? 'text' : 'password'}
-                      className="form-control form-control-lg input-with-icon password-input"
-                      id="password"
-                      placeholder="Ingrese su contraseña"
-                      value={formData.password}
-                      onChange={handleChange}
-                      required
-                    />
-
-                
-
-                    <button
-                      type="button"
-                      className="password-toggle"
-                      onClick={() => setMostrarPassword((prev) => !prev)}
-                      aria-label={
-                        mostrarPassword
-                          ? 'Ocultar contraseña'
-                          : 'Mostrar contraseña'
-                      }
-                    >
-                      <i
-                        className={`bi ${mostrarPassword ? 'bi-eye-slash' : 'bi-eye'
-                          }`}
-                      ></i>
-                    </button>
-                  </div>
-
+                  <input
+                    type="password"
+                    className="form-control form-control-lg input-with-icon"
+                    id="password"
+                    placeholder="Ingrese su contraseña"
+                    value={formData.password}
+                    onChange={handleChange}
+                    required
+                  />
+                  <i className="bi bi-lock icon-inside"></i>
                   <small className="text-light d-block mt-1">
                     Mínimo 8 caracteres, una letra y un número.
                   </small>
                 </div>
 
-                <div className="col-md-6">
+                <div className="col-md-6 position-relative">
                   <label htmlFor="confirmPassword" className="form-label">
                     Repetir Contraseña
                   </label>
-
-                  <div className="position-relative">
-                    <input
-                      type={mostrarConfirmPassword ? 'text' : 'password'}
-                      className="form-control form-control-lg password-input"
-                      id="confirmPassword"
-                      placeholder="Repita su contraseña"
-                      value={formData.confirmPassword}
-                      onChange={handleChange}
-                      required
-                    />
-
-                
-
-                    <button
-                      type="button"
-                      className="password-toggle"
-                      onClick={() =>
-                        setMostrarConfirmPassword((prev) => !prev)
-                      }
-                      aria-label={
-                        mostrarConfirmPassword
-                          ? 'Ocultar contraseña'
-                          : 'Mostrar contraseña'
-                      }
-                    >
-                      <i
-                        className={`bi ${mostrarConfirmPassword
-                            ? 'bi-eye-slash'
-                            : 'bi-eye'
-                          }`}
-                      ></i>
-                    </button>
-                  </div>
+                  <input
+                    type="password"
+                    className="form-control form-control-lg input-with-icon"
+                    id="confirmPassword"
+                    placeholder="Repita su contraseña"
+                    value={formData.confirmPassword}
+                    onChange={handleChange}
+                    required
+                  />
+                  <i className="bi bi-lock-fill icon-inside"></i>
                 </div>
               </div>
 
@@ -884,9 +1075,13 @@ function Register({ onRegisterComplete, onCancelRegister }) {
               </div>
 
               {/* Botón principal con ícono */}
-              <button className="btn btn-primary btn-lg w-100" type="submit">
-                <i className="bi bi-send"></i>
-                Enviar Formulario
+              <button
+                className="btn btn-primary btn-lg w-100"
+                type="submit"
+                disabled={procesandoLogo}
+              >
+                <i className={procesandoLogo ? 'bi bi-hourglass-split' : 'bi bi-send'}></i>
+                {procesandoLogo ? ' Procesando logo...' : ' Enviar Formulario'}
               </button>
             </form>
 
