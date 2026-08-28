@@ -22,6 +22,9 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
   */
   const [showSettings, setShowSettings] = useState(false);
   const [showResumenMensual, setShowResumenMensual] = useState(false);
+
+  const [seccionActiva, setSeccionActiva] = useState('inicio');
+
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [noMostrarWelcome, setNoMostrarWelcome] = useState(false);
 
@@ -29,6 +32,16 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
   const [solicitandoBaja, setSolicitandoBaja] = useState(false);
   const [cancelandoReservaId, setCancelandoReservaId] = useState(null);
   const [reservasCanceladasLocal, setReservasCanceladasLocal] = useState([]);
+
+  /*
+    Alias internos de clientes por club.
+    - El nombre real del usuario nunca se modifica.
+    - El alias pertenece solamente al club.
+    - La visibilidad nombre/alias se controla por cada reserva.
+  */
+  const [aliasesClientesPorUsuario, setAliasesClientesPorUsuario] = useState({});
+  const [reservasMostrandoAlias, setReservasMostrandoAlias] = useState({});
+  const [aliasProcesandoReservaId, setAliasProcesandoReservaId] = useState(null);
 
   /*
     Gestión de turnos fijos.
@@ -3584,7 +3597,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
       }
 
       setCanchas((prev) => prev.filter((item) => getCanchaId(item) !== canchaId));
-      setHorariosPorCancha((prev) => {
+      setConfigHorariosPorCancha((prev) => {
         const next = { ...prev };
         delete next[canchaId];
         return next;
@@ -3657,6 +3670,895 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
   const obtenerIdReserva = (reserva) =>
     reserva?.id_reserva || reserva?.id || null;
+
+  const escaparHtmlPago = (valor) =>
+    String(valor ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+
+  const obtenerIdUsuarioReserva = (reserva) => {
+    const idUsuario = Number(
+      reserva?.id_usuario ??
+      reserva?.usuario?.id_usuario ??
+      reserva?.usuario?.id
+    );
+
+    return Number.isInteger(idUsuario) && idUsuario > 0
+      ? idUsuario
+      : null;
+  };
+
+  const obtenerNombreRealReserva = (reserva) => {
+    const nombreDesdeUsuario = [
+      reserva?.usuario?.nombre_usuario,
+      reserva?.usuario?.apellido_usuario,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+
+    return String(
+      reserva?.cliente_nombre ||
+      nombreDesdeUsuario ||
+      'Usuario'
+    ).trim();
+  };
+
+  const obtenerClaveAliasReserva = (reserva) => {
+    const idReserva = obtenerIdReserva(reserva);
+
+    if (idReserva) {
+      return String(idReserva);
+    }
+
+    return [
+      obtenerIdUsuarioReserva(reserva) || 'sin-usuario',
+      reserva?.fecha || 'sin-fecha',
+      reserva?.hora || 'sin-hora',
+      reserva?.cancha || reserva?.deporte || 'sin-cancha',
+    ].join('-');
+  };
+
+  const obtenerAliasLocalCliente = (idUsuario) => {
+    if (!idUsuario) return null;
+
+    const claveUsuario = String(idUsuario);
+
+    return Object.prototype.hasOwnProperty.call(
+      aliasesClientesPorUsuario,
+      claveUsuario
+    )
+      ? aliasesClientesPorUsuario[claveUsuario]
+      : undefined;
+  };
+
+  const consultarAliasCliente = async (
+    idUsuario,
+    { forzar = false } = {}
+  ) => {
+    if (!idClubActual || !idUsuario) {
+      return null;
+    }
+
+    const claveUsuario = String(idUsuario);
+    const aliasLocal = obtenerAliasLocalCliente(idUsuario);
+
+    if (!forzar && aliasLocal !== undefined) {
+      return aliasLocal;
+    }
+
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      throw new Error(
+        'La sesión no está disponible. Cerrá sesión e ingresá nuevamente.'
+      );
+    }
+
+    const response = await fetch(
+      apiUrl(`/club/${idClubActual}/clientes/${idUsuario}/alias`),
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const data = await leerRespuestaHttp(response);
+
+    if (!response.ok) {
+      throw new Error(
+        obtenerMensajeError(
+          data,
+          `No se pudo consultar el alias. Error HTTP ${response.status}.`
+        )
+      );
+    }
+
+    const alias =
+      typeof data?.alias === 'string' && data.alias.trim()
+        ? data.alias.trim()
+        : null;
+
+    setAliasesClientesPorUsuario((prev) => ({
+      ...prev,
+      [claveUsuario]: alias,
+    }));
+
+    return alias;
+  };
+
+  const obtenerNombreVisibleReserva = (reserva) => {
+    const idUsuario = obtenerIdUsuarioReserva(reserva);
+    const claveReserva = obtenerClaveAliasReserva(reserva);
+    const alias = obtenerAliasLocalCliente(idUsuario);
+
+    if (
+      reservasMostrandoAlias[claveReserva] &&
+      typeof alias === 'string' &&
+      alias.trim()
+    ) {
+      return alias.trim();
+    }
+
+    return obtenerNombreRealReserva(reserva);
+  };
+
+  const handleAlternarAliasReserva = async (reserva) => {
+    const idUsuario = obtenerIdUsuarioReserva(reserva);
+    const claveReserva = obtenerClaveAliasReserva(reserva);
+
+    if (!idUsuario) {
+      await Swal.fire({
+        icon: 'info',
+        title: 'Cliente sin cuenta vinculada',
+        text: 'Esta reserva no está vinculada a un usuario registrado, por lo que no puede tener un alias interno.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+      return;
+    }
+
+    if (reservasMostrandoAlias[claveReserva]) {
+      setReservasMostrandoAlias((prev) => ({
+        ...prev,
+        [claveReserva]: false,
+      }));
+      return;
+    }
+
+    setAliasProcesandoReservaId(claveReserva);
+
+    try {
+      const alias = await consultarAliasCliente(idUsuario);
+
+      if (!alias) {
+        await Swal.fire({
+          icon: 'info',
+          title: 'Sin alias cargado',
+          html: `
+            <p>
+              <strong>${escaparHtmlPago(obtenerNombreRealReserva(reserva))}</strong>
+              todavía no tiene un alias interno en este club.
+            </p>
+            <p>Podés cargarlo con el botón del lápiz.</p>
+          `,
+          confirmButtonText: 'Aceptar',
+          confirmButtonColor: '#087bff',
+        });
+        return;
+      }
+
+      setReservasMostrandoAlias((prev) => ({
+        ...prev,
+        [claveReserva]: true,
+      }));
+    } catch (error) {
+      console.error('Error al consultar alias del cliente:', error);
+
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo consultar el alias',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    } finally {
+      setAliasProcesandoReservaId(null);
+    }
+  };
+
+  const handleEditarAliasReserva = async (reserva) => {
+    const idUsuario = obtenerIdUsuarioReserva(reserva);
+    const claveReserva = obtenerClaveAliasReserva(reserva);
+
+    if (!idUsuario) {
+      await Swal.fire({
+        icon: 'info',
+        title: 'Cliente sin cuenta vinculada',
+        text: 'Esta reserva no está vinculada a un usuario registrado, por lo que no puede tener un alias interno.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+      return;
+    }
+
+    setAliasProcesandoReservaId(claveReserva);
+
+    try {
+      const aliasActual =
+        (await consultarAliasCliente(idUsuario)) || '';
+
+      const resultado = await Swal.fire({
+        title: aliasActual ? 'Editar alias' : 'Agregar alias',
+        html: `
+          <div style="text-align:left;line-height:1.45;">
+            <p style="margin:0 0 10px;">
+              Cliente:
+              <strong>${escaparHtmlPago(obtenerNombreRealReserva(reserva))}</strong>
+            </p>
+            <p style="margin:0;color:#64748b;font-size:0.9rem;">
+              Este apodo es interno y solamente lo verá este club.
+            </p>
+          </div>
+        `,
+        input: 'text',
+        inputValue: aliasActual,
+        inputPlaceholder: 'Ej: Juanchi - 7ma',
+        inputAttributes: {
+          maxlength: '120',
+          autocomplete: 'off',
+        },
+        inputValidator: (value) => {
+          const aliasLimpio = String(value || '').trim();
+
+          if (!aliasLimpio) {
+            return 'Escribí un alias.';
+          }
+
+          if (aliasLimpio.length > 120) {
+            return 'El alias no puede superar los 120 caracteres.';
+          }
+
+          return undefined;
+        },
+        showCancelButton: true,
+        confirmButtonText: 'Guardar alias',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#16a34a',
+        cancelButtonColor: '#64748b',
+        reverseButtons: true,
+      });
+
+      if (!resultado.isConfirmed) return;
+
+      const aliasLimpio = String(resultado.value || '').trim();
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error(
+          'La sesión no está disponible. Cerrá sesión e ingresá nuevamente.'
+        );
+      }
+
+      const response = await fetch(
+        apiUrl(`/club/${idClubActual}/clientes/${idUsuario}/alias`),
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            alias: aliasLimpio,
+          }),
+        }
+      );
+
+      const data = await leerRespuestaHttp(response);
+
+      if (!response.ok) {
+        throw new Error(
+          obtenerMensajeError(
+            data,
+            `No se pudo guardar el alias. Error HTTP ${response.status}.`
+          )
+        );
+      }
+
+      const aliasGuardado =
+        typeof data?.alias === 'string' && data.alias.trim()
+          ? data.alias.trim()
+          : aliasLimpio;
+
+      setAliasesClientesPorUsuario((prev) => ({
+        ...prev,
+        [String(idUsuario)]: aliasGuardado,
+      }));
+
+      // Después de guardarlo mostramos el alias en esa reserva
+      // para que el cambio sea visible inmediatamente.
+      setReservasMostrandoAlias((prev) => ({
+        ...prev,
+        [claveReserva]: true,
+      }));
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Alias guardado',
+        html: `
+          <p style="margin:0;">
+            <strong>${escaparHtmlPago(obtenerNombreRealReserva(reserva))}</strong>
+            ahora figura internamente como
+            <strong>${escaparHtmlPago(aliasGuardado)}</strong>.
+          </p>
+        `,
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+    } catch (error) {
+      console.error('Error al guardar alias del cliente:', error);
+
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo guardar el alias',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    } finally {
+      setAliasProcesandoReservaId(null);
+    }
+  };
+
+  const formatearMontoPago = (valor) =>
+    Number(valor || 0).toLocaleString('es-AR', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    });
+
+  const sugerirCantidadParticipantesPago = (reserva) => {
+    const texto = `${reserva?.deporte || ''} ${reserva?.cancha || ''}`
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+    if (/futbol\s*11|futbol11/.test(texto)) return 22;
+    if (/futbol\s*8|futbol8/.test(texto)) return 16;
+    if (/futbol\s*7|futbol7/.test(texto)) return 14;
+    if (/futbol\s*5|futbol5|futsal/.test(texto)) return 10;
+    if (/padel/.test(texto)) return 4;
+    if (/tenis/.test(texto)) return 2;
+    if (/basquet|basket/.test(texto)) return 10;
+    if (/voley|volley/.test(texto)) return 12;
+
+    // Es solo una sugerencia inicial: el club siempre puede cambiarla.
+    return 4;
+  };
+
+  const guardarCobrosReserva = async (idReserva, cobros) => {
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      throw new Error(
+        'La sesión no está disponible. Cerrá sesión e ingresá nuevamente.'
+      );
+    }
+
+    const response = await fetch(apiUrl(`/reserva/${idReserva}/cobros`), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ cobros }),
+    });
+
+    const data = await leerRespuestaHttp(response);
+
+    if (!response.ok) {
+      throw new Error(
+        obtenerMensajeError(
+          data,
+          `No se pudieron registrar los pagos. Error HTTP ${response.status}.`
+        )
+      );
+    }
+
+    return data;
+  };
+
+  const handleRegistrarPagos = async (reserva) => {
+    const idReserva = obtenerIdReserva(reserva);
+
+    if (!idReserva) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'Reserva no disponible',
+        text: 'No se pudo identificar la reserva.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error(
+          'La sesión no está disponible. Cerrá sesión e ingresá nuevamente.'
+        );
+      }
+
+      const response = await fetch(apiUrl(`/reserva/${idReserva}/cobros`), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await leerRespuestaHttp(response);
+
+      if (!response.ok) {
+        throw new Error(
+          obtenerMensajeError(
+            data,
+            `No se pudieron consultar los pagos. Error HTTP ${response.status}.`
+          )
+        );
+      }
+
+      const montoTotal = Number(
+        data?.monto_total ??
+        normalizarImporteDesdeBackend(
+          reserva?.precio ?? reserva?.monto_total ?? 0
+        )
+      );
+
+      if (!Number.isFinite(montoTotal) || montoTotal <= 0) {
+        await Swal.fire({
+          icon: 'warning',
+          title: 'Importe no disponible',
+          text: 'Esta reserva no tiene un importe válido para registrar el cobro.',
+          confirmButtonText: 'Aceptar',
+          confirmButtonColor: '#087bff',
+        });
+        return;
+      }
+
+      const cobrosExistentes = Array.isArray(data?.cobros)
+        ? data.cobros
+        : [];
+
+      const resumenActual = cobrosExistentes.length
+        ? `
+          <div style="margin-top:12px;padding:10px 12px;border-radius:10px;background:#f4f7fb;text-align:left;">
+            <strong style="display:block;margin-bottom:5px;">Cobro actual</strong>
+            <span style="display:block;">Efectivo: $${formatearMontoPago(data?.total_efectivo)}</span>
+            <span style="display:block;">Transferencia/electrónico: $${formatearMontoPago(data?.total_electronico)}</span>
+          </div>
+        `
+        : '';
+
+      const tipoCobro = await Swal.fire({
+        icon: 'question',
+        title: 'Registrar pagos',
+        html: `
+          <div style="text-align:left;line-height:1.45;">
+            <p style="margin:0;">
+              <strong>${escaparHtmlPago(reserva?.cliente_nombre || 'Reserva')}</strong>
+            </p>
+            <p style="margin:4px 0 0;">
+              ${escaparHtmlPago(formatearFecha(reserva?.fecha))} ·
+              ${escaparHtmlPago(reserva?.hora || '')} ·
+              ${escaparHtmlPago(reserva?.cancha || reserva?.deporte || '')}
+            </p>
+            <p style="margin:12px 0 0;font-size:1.05rem;">
+              Total del turno:
+              <strong>$${formatearMontoPago(montoTotal)}</strong>
+            </p>
+            ${resumenActual}
+            <p style="margin:14px 0 0;">
+              Elegí cómo querés registrar el cobro.
+            </p>
+          </div>
+        `,
+        showCancelButton: true,
+        showDenyButton: true,
+        confirmButtonText: 'Cobro completo',
+        denyButtonText: 'Dividir pago',
+        cancelButtonText: 'Volver',
+        confirmButtonColor: '#16a34a',
+        denyButtonColor: '#087bff',
+        cancelButtonColor: '#64748b',
+        reverseButtons: true,
+      });
+
+      if (tipoCobro.isDismissed) return;
+
+      if (tipoCobro.isConfirmed) {
+        const metodoActual =
+          cobrosExistentes.length === 1
+            ? cobrosExistentes[0]?.metodo_pago
+            : null;
+
+        const metodo = await Swal.fire({
+          icon: 'question',
+          title: 'Método de pago',
+          text: `Total a registrar: $${formatearMontoPago(montoTotal)}`,
+          input: 'radio',
+          inputOptions: {
+            efectivo: 'Efectivo',
+            electronico: 'Transferencia / electrónico',
+          },
+          inputValue:
+            metodoActual === 'electronico'
+              ? 'electronico'
+              : 'efectivo',
+          inputValidator: (value) => {
+            if (!value) {
+              return 'Seleccioná un método de pago.';
+            }
+            return undefined;
+          },
+          showCancelButton: true,
+          confirmButtonText: 'Guardar cobro',
+          cancelButtonText: 'Volver',
+          confirmButtonColor: '#16a34a',
+          cancelButtonColor: '#64748b',
+          reverseButtons: true,
+        });
+
+        if (!metodo.isConfirmed) return;
+
+        const resultado = await guardarCobrosReserva(idReserva, [
+          {
+            monto: montoTotal,
+            metodo_pago: metodo.value,
+          },
+        ]);
+
+        await Swal.fire({
+          icon: 'success',
+          title: 'Cobro registrado',
+          html: `
+            <div style="text-align:left;line-height:1.5;">
+              <p style="margin:0 0 6px;">
+                Efectivo:
+                <strong>$${formatearMontoPago(resultado?.total_efectivo)}</strong>
+              </p>
+              <p style="margin:0 0 6px;">
+                Transferencia/electrónico:
+                <strong>$${formatearMontoPago(resultado?.total_electronico)}</strong>
+              </p>
+              <p style="margin:10px 0 0;">
+                Total:
+                <strong>$${formatearMontoPago(resultado?.total_cobrado)}</strong>
+              </p>
+            </div>
+          `,
+          confirmButtonText: 'Aceptar',
+          confirmButtonColor: '#087bff',
+        });
+
+        return;
+      }
+
+      if (tipoCobro.isDenied) {
+        const cantidadSugerida =
+          cobrosExistentes.length > 1
+            ? cobrosExistentes.length
+            : sugerirCantidadParticipantesPago(reserva);
+
+        const seleccionCantidad = await Swal.fire({
+          icon: 'question',
+          title: 'Dividir pago',
+          html: `
+            <div style="text-align:left;line-height:1.5;">
+              <p style="margin:0 0 8px;">
+                Total del turno:
+                <strong>$${formatearMontoPago(montoTotal)}</strong>
+              </p>
+
+              <p style="margin:0;">
+                Indicá entre cuántas personas o partes querés dividir el pago.
+              </p>
+
+              <small style="display:block;margin-top:8px;color:#64748b;">
+                Te sugerimos una cantidad según la cancha/deporte, pero podés cambiarla.
+                Máximo 22.
+              </small>
+            </div>
+          `,
+          input: 'number',
+          inputValue: cantidadSugerida,
+          inputAttributes: {
+            min: '2',
+            max: '22',
+            step: '1',
+          },
+          inputValidator: (value) => {
+            const cantidad = Number(value);
+
+            if (
+              !Number.isInteger(cantidad) ||
+              cantidad < 2 ||
+              cantidad > 22
+            ) {
+              return 'Ingresá una cantidad entera entre 2 y 22.';
+            }
+
+            return undefined;
+          },
+          showCancelButton: true,
+          confirmButtonText: 'Continuar',
+          cancelButtonText: 'Volver',
+          confirmButtonColor: '#087bff',
+          cancelButtonColor: '#64748b',
+          reverseButtons: true,
+        });
+
+        if (!seleccionCantidad.isConfirmed) return;
+
+        const cantidad = Number(seleccionCantidad.value);
+
+        const montoBaseCentavos = Math.floor(
+          Math.round(montoTotal * 100) / cantidad
+        );
+        const totalCentavos = Math.round(montoTotal * 100);
+
+        const filasIniciales = Array.from(
+          { length: cantidad },
+          (_, index) => {
+            const cobroExistente = cobrosExistentes[index];
+
+            const reutilizarCobrosExistentes =
+              cobrosExistentes.length === cantidad;
+
+            const montoCentavos =
+              reutilizarCobrosExistentes &&
+              cobroExistente?.monto !== undefined
+                ? Math.round(Number(cobroExistente.monto) * 100)
+                : index === cantidad - 1
+                  ? totalCentavos -
+                    montoBaseCentavos * (cantidad - 1)
+                  : montoBaseCentavos;
+
+            return {
+              nombre:
+                reutilizarCobrosExistentes
+                  ? cobroExistente?.participante_nombre || ''
+                  : index === 0
+                    ? reserva?.cliente_nombre || ''
+                    : '',
+              monto: montoCentavos / 100,
+              metodo:
+                reutilizarCobrosExistentes
+                  ? cobroExistente?.metodo_pago || 'efectivo'
+                  : 'efectivo',
+            };
+          }
+        );
+
+        const filasHtml = filasIniciales
+          .map(
+            (fila, index) => `
+              <div
+                style="
+                  display:grid;
+                  grid-template-columns:34px minmax(0,1.3fr) minmax(110px,0.7fr) minmax(160px,0.9fr);
+                  gap:8px;
+                  align-items:center;
+                  margin-bottom:9px;
+                "
+              >
+                <strong>${index + 1}</strong>
+
+                <input
+                  id="pago-nombre-${index}"
+                  class="swal2-input"
+                  type="text"
+                  maxlength="120"
+                  placeholder="Nombre / alias"
+                  value="${escaparHtmlPago(fila.nombre)}"
+                  style="width:100%;margin:0;height:40px;"
+                />
+
+                <input
+                  id="pago-monto-${index}"
+                  class="swal2-input"
+                  type="number"
+                  min="0"
+                  step="500"
+                  value="${fila.monto}"
+                  style="width:100%;margin:0;height:40px;"
+                />
+
+                <select
+                  id="pago-metodo-${index}"
+                  class="swal2-select"
+                  style="width:100%;margin:0;height:40px;"
+                >
+                  <option
+                    value="efectivo"
+                    ${fila.metodo === 'efectivo' ? 'selected' : ''}
+                  >
+                    Efectivo
+                  </option>
+
+                  <option
+                    value="electronico"
+                    ${fila.metodo === 'electronico' ? 'selected' : ''}
+                  >
+                    Transferencia / electrónico
+                  </option>
+                </select>
+              </div>
+            `
+          )
+          .join('');
+
+        const dividido = await Swal.fire({
+          title: `Dividir pago entre ${cantidad}`,
+          width: 860,
+          html: `
+            <div style="text-align:left;">
+              <p style="margin:0 0 12px;">
+                Total del turno:
+                <strong>$${formatearMontoPago(montoTotal)}</strong>
+              </p>
+
+              <div
+                style="
+                  display:grid;
+                  grid-template-columns:34px minmax(0,1.3fr) minmax(110px,0.7fr) minmax(160px,0.9fr);
+                  gap:8px;
+                  margin-bottom:6px;
+                  color:#64748b;
+                  font-size:12px;
+                  font-weight:700;
+                "
+              >
+                <span>#</span>
+                <span>Jugador / alias</span>
+                <span>Importe</span>
+                <span>Método</span>
+              </div>
+
+              <div
+                style="
+                  max-height:55vh;
+                  overflow-y:auto;
+                  padding-right:4px;
+                "
+              >
+                ${filasHtml}
+              </div>
+
+              <small style="display:block;margin-top:10px;color:#64748b;">
+                Podés editar los importes. La suma de las ${cantidad} partes
+                debe coincidir con el total del turno.
+              </small>
+            </div>
+          `,
+          showCancelButton: true,
+          confirmButtonText: 'Guardar pagos',
+          cancelButtonText: 'Volver',
+          confirmButtonColor: '#16a34a',
+          cancelButtonColor: '#64748b',
+          reverseButtons: true,
+          preConfirm: () => {
+            const popup = Swal.getPopup();
+
+            const cobros = Array.from(
+              { length: cantidad },
+              (_, index) => {
+                const nombre = String(
+                  popup?.querySelector(`#pago-nombre-${index}`)?.value || ''
+                ).trim();
+
+                const monto = Number(
+                  popup?.querySelector(`#pago-monto-${index}`)?.value
+                );
+
+                const metodo = String(
+                  popup?.querySelector(`#pago-metodo-${index}`)?.value || ''
+                );
+
+                return {
+                  participante_nombre:
+                    nombre || `Jugador ${index + 1}`,
+                  monto,
+                  metodo_pago: metodo,
+                };
+              }
+            );
+
+            if (
+              cobros.some(
+                (cobro) =>
+                  !Number.isFinite(cobro.monto) ||
+                  cobro.monto <= 0
+              )
+            ) {
+              Swal.showValidationMessage(
+                'Todos los importes deben ser mayores a $0.'
+              );
+              return false;
+            }
+
+            const sumaCentavos = cobros.reduce(
+              (total, cobro) =>
+                total + Math.round(Number(cobro.monto) * 100),
+              0
+            );
+
+            if (sumaCentavos !== totalCentavos) {
+              Swal.showValidationMessage(
+                `La suma debe ser exactamente $${formatearMontoPago(montoTotal)}.`
+              );
+              return false;
+            }
+
+            return cobros;
+          },
+        });
+
+        if (!dividido.isConfirmed || !dividido.value) return;
+
+        const resultado = await guardarCobrosReserva(
+          idReserva,
+          dividido.value
+        );
+
+        await Swal.fire({
+          icon: 'success',
+          title: 'Pagos registrados',
+          html: `
+            <div style="text-align:left;line-height:1.5;">
+              <p style="margin:0 0 6px;">
+                Efectivo:
+                <strong>$${formatearMontoPago(resultado?.total_efectivo)}</strong>
+              </p>
+              <p style="margin:0 0 6px;">
+                Transferencia/electrónico:
+                <strong>$${formatearMontoPago(resultado?.total_electronico)}</strong>
+              </p>
+              <p style="margin:10px 0 0;">
+                Total:
+                <strong>$${formatearMontoPago(resultado?.total_cobrado)}</strong>
+              </p>
+            </div>
+          `,
+          confirmButtonText: 'Aceptar',
+          confirmButtonColor: '#087bff',
+        });
+      }
+    } catch (error) {
+      console.error('Error al registrar pagos de la reserva:', error);
+
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudieron registrar los pagos',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    }
+  };
 
   const handleCancelarReservaClub = async (reserva) => {
     const idReserva = obtenerIdReserva(reserva);
@@ -4153,8 +5055,8 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
         return `
           <option value="${idCancha}">
             ${escaparHtmlTurnoFijo(
-              deporte ? `${nombre} · ${deporte}` : nombre
-            )}
+          deporte ? `${nombre} · ${deporte}` : nombre
+        )}
           </option>
         `;
       })
@@ -4183,8 +5085,8 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
             style="display:block;width:100%;margin:0 0 12px;"
           >
             ${clientesRegistrados.length > 0
-              ? '<option value="registrado">Usuario registrado que ya reservó en el club</option>'
-              : ''}
+          ? '<option value="registrado">Usuario registrado que ya reservó en el club</option>'
+          : ''}
             <option value="externo">Cliente externo / sin cuenta</option>
           </select>
 
@@ -4594,6 +5496,15 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
   };
 
 
+  const cambiarSeccion = (seccion) => {
+    setSeccionActiva(seccion);
+
+    // Compatibilidad temporal con la estructura actual.
+    // Después vamos a retirar estos dos estados cuando terminemos
+    // de separar todas las secciones.
+    setShowSettings(seccion === 'configuracion');
+    setShowResumenMensual(seccion === 'resumen');
+  };
 
   return (
     <div className="pdc-owner-dashboard">
@@ -4605,60 +5516,75 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
         {/* HEADER SUPERIOR */}
         <header className="pdc-header">
           <div className="pdc-main-title">
-            <h1>Dashboard</h1>
-            <p>Resumen general de tu club</p>
-          </div>
-
-          <div className="pdc-club-title">
-            <h2>{nombreClub}</h2>
-            <p>¡Hola {nombreDueno}!</p>
+            <h1>{nombreClub}</h1>
+            <h5>Resumen general de tu club</h5>
           </div>
 
           <div className="pdc-header-actions">
             <button
+              type="button"
               className="pdc-settings-button"
-              onClick={() => {
-                setShowSettings((prev) => !prev);
-                setShowResumenMensual(false);
-              }}
-              title="Configuración"
+              onClick={() => cambiarSeccion('inicio')}
+              title="Inicio"
             >
-              <i
-                className={
-                  showSettings
-                    ? 'bi bi-arrow-left'
-                    : 'bi bi-gear'
-                }
-              ></i>
-
-              {showSettings
-                ? 'Volver al dashboard'
-                : 'Configuración'}
+              <i className="bi bi-house-door"></i>
+              Inicio
             </button>
 
             <button
               type="button"
               className="pdc-settings-button"
-              onClick={() => {
-                setShowResumenMensual((prev) => !prev);
-                setShowSettings(false);
-              }}
-              title="Resumen mensual"
+              onClick={() => cambiarSeccion('reservas')}
+              title="Reservas"
             >
-              <i
-                className={
-                  showResumenMensual
-                    ? 'bi bi-arrow-left'
-                    : 'bi bi-bar-chart-line'
-                }
-              ></i>
-
-              {showResumenMensual
-                ? 'Volver al dashboard'
-                : 'Resumen mensual'}
+              <i className="bi bi-calendar-check"></i>
+              Reservas
             </button>
 
             <button
+              type="button"
+              className="pdc-settings-button"
+              onClick={() => cambiarSeccion('turnos-fijos')}
+              title="Turnos fijos"
+            >
+              <i className="bi bi-repeat"></i>
+              Turnos fijos
+            </button>
+
+            <button
+              type="button"
+              className="pdc-settings-button"
+              onClick={() => cambiarSeccion('cartelera-torneos')}
+              title="Cartelera y Torneos"
+            >
+              <i className="bi bi-megaphone"></i>
+              Cartelera y Torneos
+            </button>
+
+            <button
+              type="button"
+              className="pdc-settings-button"
+              onClick={() => cambiarSeccion('resumen')}
+              title="Resumen mensual"
+            >
+              <i className="bi bi-bar-chart-line"></i>
+              Resumen mensual
+            </button>
+
+            <button
+              type="button"
+              className="pdc-settings-button"
+              onClick={() => cambiarSeccion('configuracion')}
+              title="Configuración"
+            >
+              <i className="bi bi-gear"></i>
+              Configuración
+            </button>
+
+            {/* Temporalmente permanecen en el header.
+                Pagar Suscripción se moverá luego a Configuración. */}
+            <button
+              type="button"
               className="pdc-pay-button"
               onClick={abrirModalSuscripcion}
               title="Pagar Suscripción"
@@ -4678,6 +5604,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
             </button>
           </div>
         </header>
+
 
         {/* SECCIÓN DE CONFIGURACIÓN */}
         {showSettings && (
@@ -5601,7 +6528,9 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
           </section>
         )}
 
-        {!showSettings && !showResumenMensual && (
+
+        {/* INICIO: resumen rápido + canchas del club */}
+        {!showSettings && !showResumenMensual && seccionActiva === 'inicio' && (
           <>
             {/* CARDS SUPERIORES CON ESTADÍSTICAS */}
             <section className="pdc-stats-grid">
@@ -5670,9 +6599,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
               </div>
             </section>
 
-            {/* GRILLA PRINCIPAL: CANCHAS + PRÓXIMAS RESERVAS */}
-            <section className="pdc-main-grid">
-              <div className="pdc-panel pdc-courts-panel">
+              <section className="pdc-panel pdc-courts-panel">
                 <div className="pdc-panel-header">
                   <h3>Canchas de tu club</h3>
                 </div>
@@ -5770,10 +6697,13 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                     ))
                   )}
                 </div>
-              </div>
+              </section>
+          </>
+        )}
 
-              {/* Panel de próximas reservas */}
-              <div className="pdc-panel pdc-upcoming-reservations-panel">
+        {/* RESERVAS: gestión de próximas reservas y calendario */}
+        {!showSettings && !showResumenMensual && seccionActiva === 'reservas' && (
+              <section className="pdc-panel pdc-upcoming-reservations-panel">
                 <div className="pdc-panel-header">
                   <h3>Próximas reservas</h3>
 
@@ -5801,8 +6731,61 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                           <div className="pdc-reservation-client">
                             <span>
                               <i className="bi bi-person-fill"></i>
-                              {reserva.cliente_nombre || 'Usuario'}
+                              {obtenerNombreVisibleReserva(reserva)}
                             </span>
+
+                            {obtenerIdUsuarioReserva(reserva) && (
+                              <div
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '5px',
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  className="pdc-btn-edit-mini"
+                                  onClick={() => handleAlternarAliasReserva(reserva)}
+                                  disabled={
+                                    aliasProcesandoReservaId ===
+                                    obtenerClaveAliasReserva(reserva)
+                                  }
+                                  title={
+                                    reservasMostrandoAlias[
+                                      obtenerClaveAliasReserva(reserva)
+                                    ]
+                                      ? 'Mostrar nombre y apellido'
+                                      : 'Mostrar alias interno'
+                                  }
+                                >
+                                  <i
+                                    className={`bi ${
+                                      aliasProcesandoReservaId ===
+                                      obtenerClaveAliasReserva(reserva)
+                                        ? 'bi-hourglass-split'
+                                        : reservasMostrandoAlias[
+                                            obtenerClaveAliasReserva(reserva)
+                                          ]
+                                          ? 'bi-eye-slash'
+                                          : 'bi-eye'
+                                    }`}
+                                  ></i>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  className="pdc-btn-edit-mini"
+                                  onClick={() => handleEditarAliasReserva(reserva)}
+                                  disabled={
+                                    aliasProcesandoReservaId ===
+                                    obtenerClaveAliasReserva(reserva)
+                                  }
+                                  title="Agregar o editar alias interno"
+                                >
+                                  <i className="bi bi-pencil"></i>
+                                </button>
+                              </div>
+                            )}
 
                             {reserva.cliente_telefono && (
                               <a href={`tel:${reserva.cliente_telefono}`}>
@@ -5841,6 +6824,16 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
                           <button
                             type="button"
+                            className="pdc-light-button"
+                            onClick={() => handleRegistrarPagos(reserva)}
+                            title="Registrar o editar pagos de esta reserva"
+                          >
+                            <i className="bi bi-cash-coin"></i>
+                            Registrar pagos
+                          </button>
+
+                          <button
+                            type="button"
                             className="pdc-cancel-reservation"
                             onClick={() => handleCancelarReservaClub(reserva)}
                             disabled={
@@ -5875,7 +6868,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
                           <div className="pdc-calendar-reservation-detail">
                             <p>{reserva.deporte}</p>
-                            <small>{reserva.cliente_nombre || 'Usuario'}</small>
+                            <small>{obtenerNombreVisibleReserva(reserva)}</small>
                             {reserva.cliente_telefono && (
                               <a href={`tel:${reserva.cliente_telefono}`}>{reserva.cliente_telefono}</a>
                             )}
@@ -5885,11 +6878,120 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                     )}
                   </div>
                 )}
-              </div>
-            </section>
+              </section>
+        )}
 
+        {/* TURNOS FIJOS: solicitudes, activos y alta manual */}
+        {!showSettings && !showResumenMensual && seccionActiva === 'turnos-fijos' && (
+          <>
             {/* TURNOS FIJOS */}
             <section className="pdc-main-grid">
+              <div className="pdc-panel">
+                <div className="pdc-panel-header">
+                  <div>
+                    <h3>Turnos fijos activos</h3>
+                    <small>
+                      Incluye solicitudes aprobadas y clientes cargados por el club.
+                    </small>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="pdc-light-button"
+                    onClick={handleNuevoTurnoFijoManual}
+                    disabled={cargandoTurnosFijos || !canchas.length}
+                  >
+                    <i className="bi bi-plus-circle"></i>
+                    Nuevo turno fijo
+                  </button>
+                </div>
+
+                {cargandoTurnosFijos ? (
+                  <p className="pdc-alert pdc-alert-info">
+                    Cargando turnos fijos...
+                  </p>
+                ) : turnosFijosActivos.length === 0 ? (
+                  <p className="pdc-alert pdc-alert-info">
+                    No hay turnos fijos activos.
+                  </p>
+                ) : (
+                  <div className="pdc-upcoming-reservations-list">
+                    {turnosFijosActivos.map((turno) => {
+                      const cliente =
+                        obtenerClienteTurnoFijo(turno);
+
+                      const nombreDia =
+                        NOMBRES_DIAS_TURNO_FIJO[
+                        Number(turno.dia_semana)
+                        ] || 'Día';
+
+                      return (
+                        <div
+                          className="pdc-reservation-row"
+                          key={`turno-fijo-activo-${turno.id_turno_fijo}`}
+                        >
+                          <span>
+                            {normalizarHoraTurnoFijo(
+                              turno.hora_inicio
+                            )}
+                          </span>
+
+                          <div className="pdc-reservation-info">
+                            <strong>
+                              {cliente.nombre}
+                            </strong>
+
+                            <p>
+                              {turno.deporte?.nombre_deporte ||
+                                'Deporte'}{' '}
+                              · {nombreDia}{' '}
+                              {normalizarHoraTurnoFijo(
+                                turno.hora_inicio
+                              )}{' '}
+                              a{' '}
+                              {normalizarHoraTurnoFijo(
+                                turno.hora_fin
+                              )}
+                            </p>
+
+                            <small>
+                              {turno.cancha?.nombre_cancha ||
+                                'Cancha sin identificar'}
+                            </small>
+
+                            {cliente.telefono && (
+                              <a href={`tel:${cliente.telefono}`}>
+                                <i className="bi bi-telephone-fill"></i>{' '}
+                                {cliente.telefono}
+                              </a>
+                            )}
+                          </div>
+
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'flex-end',
+                              gap: '5px',
+                            }}
+                          >
+                            <small className="pdc-confirmed">
+                              Activo
+                            </small>
+
+                            <small>
+                              {turno.origen === 'club'
+                                ? 'Cargado por el club'
+                                : 'Solicitado por usuario'}
+                            </small>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               <div className="pdc-panel">
                 <div className="pdc-panel-header">
                   <div>
@@ -6014,114 +7116,13 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                   </div>
                 )}
               </div>
-
-              <div className="pdc-panel">
-                <div className="pdc-panel-header">
-                  <div>
-                    <h3>Turnos fijos activos</h3>
-                    <small>
-                      Incluye solicitudes aprobadas y clientes cargados por el club.
-                    </small>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="pdc-light-button"
-                    onClick={handleNuevoTurnoFijoManual}
-                    disabled={cargandoTurnosFijos || !canchas.length}
-                  >
-                    <i className="bi bi-plus-circle"></i>
-                    Nuevo turno fijo
-                  </button>
-                </div>
-
-                {cargandoTurnosFijos ? (
-                  <p className="pdc-alert pdc-alert-info">
-                    Cargando turnos fijos...
-                  </p>
-                ) : turnosFijosActivos.length === 0 ? (
-                  <p className="pdc-alert pdc-alert-info">
-                    No hay turnos fijos activos.
-                  </p>
-                ) : (
-                  <div className="pdc-upcoming-reservations-list">
-                    {turnosFijosActivos.map((turno) => {
-                      const cliente =
-                        obtenerClienteTurnoFijo(turno);
-
-                      const nombreDia =
-                        NOMBRES_DIAS_TURNO_FIJO[
-                        Number(turno.dia_semana)
-                        ] || 'Día';
-
-                      return (
-                        <div
-                          className="pdc-reservation-row"
-                          key={`turno-fijo-activo-${turno.id_turno_fijo}`}
-                        >
-                          <span>
-                            {normalizarHoraTurnoFijo(
-                              turno.hora_inicio
-                            )}
-                          </span>
-
-                          <div className="pdc-reservation-info">
-                            <strong>
-                              {cliente.nombre}
-                            </strong>
-
-                            <p>
-                              {turno.deporte?.nombre_deporte ||
-                                'Deporte'}{' '}
-                              · {nombreDia}{' '}
-                              {normalizarHoraTurnoFijo(
-                                turno.hora_inicio
-                              )}{' '}
-                              a{' '}
-                              {normalizarHoraTurnoFijo(
-                                turno.hora_fin
-                              )}
-                            </p>
-
-                            <small>
-                              {turno.cancha?.nombre_cancha ||
-                                'Cancha sin identificar'}
-                            </small>
-
-                            {cliente.telefono && (
-                              <a href={`tel:${cliente.telefono}`}>
-                                <i className="bi bi-telephone-fill"></i>{' '}
-                                {cliente.telefono}
-                              </a>
-                            )}
-                          </div>
-
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'flex-end',
-                              gap: '5px',
-                            }}
-                          >
-                            <small className="pdc-confirmed">
-                              Activo
-                            </small>
-
-                            <small>
-                              {turno.origen === 'club'
-                                ? 'Cargado por el club'
-                                : 'Solicitado por usuario'}
-                            </small>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
             </section>
+          </>
+        )}
 
+        {/* CARTELERA Y TORNEOS */}
+        {!showSettings && !showResumenMensual && seccionActiva === 'cartelera-torneos' && (
+          <>
             {/* CARTELERA DEL CLUB */}
             <section className="pdc-panel pdc-announcements-panel">
               <div className="pdc-announcements-header">

@@ -1,7 +1,26 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { apiUrl } from '../../config/api';
 import IngresosManualesClub from './IngresosManualesClub';
 import generarResumenMensualPdf from './generarResumenMensualPdf';
+
+const obtenerPeriodoActualArgentina = () => {
+    const partes = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Argentina/Buenos_Aires',
+        year: 'numeric',
+        month: '2-digit',
+    }).formatToParts(new Date());
+
+    const valores = Object.fromEntries(
+        partes
+            .filter((parte) => parte.type !== 'literal')
+            .map((parte) => [parte.type, parte.value])
+    );
+
+    return {
+        anio: Number(valores.year),
+        mes: Number(valores.month),
+    };
+};
 
 const ResumenMensualClub = ({ idClub }) => {
     const MESES = [
@@ -19,19 +38,40 @@ const ResumenMensualClub = ({ idClub }) => {
         'Diciembre',
     ];
 
-    const hoy = new Date();
+    const periodoActual = obtenerPeriodoActualArgentina();
+    const anioActual = periodoActual.anio;
+    const mesActual = periodoActual.mes;
 
-    const [anioSeleccionado, setAnioSeleccionado] = useState(
-        hoy.getFullYear()
+    const periodoPdfInicial =
+        mesActual === 1
+            ? {
+                anio: anioActual - 1,
+                mes: 12,
+            }
+            : {
+                anio: anioActual,
+                mes: mesActual - 1,
+            };
+
+    /*
+        El resumen que se ve en pantalla corresponde SIEMPRE
+        al mes actual. Estos dos estados son exclusivamente
+        para elegir qué snapshot histórico descargar en PDF.
+    */
+    const [anioPdf, setAnioPdf] = useState(
+        periodoPdfInicial.anio
     );
 
-    const [mesSeleccionado, setMesSeleccionado] = useState(
-        hoy.getMonth() + 1
+    const [mesPdf, setMesPdf] = useState(
+        periodoPdfInicial.mes
     );
 
     const [resumen, setResumen] = useState(null);
     const [cargando, setCargando] = useState(false);
+    const [descargandoPdf, setDescargandoPdf] = useState(false);
+
     const [error, setError] = useState('');
+    const [errorPdf, setErrorPdf] = useState('');
 
     const formatearDinero = (valor) => {
         const numero = Number(valor || 0);
@@ -43,7 +83,45 @@ const ResumenMensualClub = ({ idClub }) => {
         });
     };
 
-    const consultarResumen = async () => {
+    const obtenerMensajeError = (data, fallback) => {
+        if (Array.isArray(data?.message)) {
+            return data.message.join(' ');
+        }
+
+        return data?.message || data?.error || fallback;
+    };
+
+    const normalizarSnapshot = (
+        data,
+        anio,
+        mes
+    ) => ({
+        ...data,
+
+        periodo: {
+            anio: data?.anio ?? anio,
+            mes: data?.mes ?? mes,
+            inicio:
+                data?.periodo_inicio ?? null,
+            fin_exclusivo:
+                data?.periodo_fin_exclusivo ?? null,
+            ocupacion_desde: null,
+        },
+
+        aclaraciones:
+            Array.isArray(data?.aclaraciones)
+                ? data.aclaraciones
+                : [
+                    'Los importes de reservas corresponden exclusivamente a operaciones registradas en DameCancha.',
+                    'Los ingresos manuales son información declarada por el club y no son verificados por DameCancha.',
+                    'La ocupación se estima según la disponibilidad configurada al momento del cálculo; los bloqueos activos se excluyen de los turnos ofrecidos.',
+                    'En el primer mes del club, la ocupación se calcula únicamente desde su fecha de alta en DameCancha.',
+                ],
+
+        es_snapshot: true,
+    });
+
+    const cargarResumenActual = async () => {
         if (!idClub) {
             setError('No se pudo identificar el club.');
             setResumen(null);
@@ -62,22 +140,10 @@ const ResumenMensualClub = ({ idClub }) => {
                 );
             }
 
-            const anioActual = hoy.getFullYear();
-            const mesActual = hoy.getMonth() + 1;
-
-            const periodoCerrado =
-                anioSeleccionado < anioActual ||
-                (
-                    anioSeleccionado === anioActual &&
-                    mesSeleccionado < mesActual
-                );
-
-            const endpoint = periodoCerrado
-                ? `/resumen-mensual/club/${idClub}?anio=${anioSeleccionado}&mes=${mesSeleccionado}`
-                : `/resumen-mensual/club/${idClub}/preview?anio=${anioSeleccionado}&mes=${mesSeleccionado}`;
-
             const response = await fetch(
-                apiUrl(endpoint),
+                apiUrl(
+                    `/resumen-mensual/club/${idClub}/preview?anio=${anioActual}&mes=${mesActual}`
+                ),
                 {
                     headers: {
                         Authorization: `Bearer ${token}`,
@@ -85,67 +151,26 @@ const ResumenMensualClub = ({ idClub }) => {
                 }
             );
 
-            const data = await response.json().catch(() => ({}));
+            const data = await response
+                .json()
+                .catch(() => ({}));
 
             if (!response.ok) {
-                const mensaje = Array.isArray(data?.message)
-                    ? data.message.join(' ')
-                    : data?.message;
-
                 throw new Error(
-                    mensaje ||
-                    `No se pudo consultar el resumen. Error HTTP ${response.status}.`
+                    obtenerMensajeError(
+                        data,
+                        `No se pudo cargar el resumen mensual. Error HTTP ${response.status}.`
+                    )
                 );
             }
 
-            if (periodoCerrado) {
-                /*
-                    El snapshot guardado tiene el período en formato plano
-                    (anio, mes, periodo_inicio...), mientras que el preview
-                    lo devuelve dentro de "periodo".
-
-                    Lo normalizamos acá para que el resto de la pantalla
-                    siga trabajando exactamente igual.
-                */
-                setResumen({
-                    ...data,
-
-                    periodo: {
-                        anio: data.anio ?? anioSeleccionado,
-                        mes: data.mes ?? mesSeleccionado,
-                        inicio: data.periodo_inicio ?? null,
-                        fin_exclusivo:
-                            data.periodo_fin_exclusivo ?? null,
-
-                        /*
-                            El snapshot ya conserva los cálculos definitivos,
-                            pero actualmente no guarda ocupacion_desde
-                            como campo separado.
-                        */
-                        ocupacion_desde: null,
-                    },
-
-                    aclaraciones:
-                        Array.isArray(data.aclaraciones)
-                            ? data.aclaraciones
-                            : [
-                                'Los importes de reservas corresponden exclusivamente a operaciones registradas en DameCancha.',
-                                'Los ingresos manuales son información declarada por el club y no son verificados por DameCancha.',
-                                'La ocupación se estima según la disponibilidad configurada al momento del cálculo; los bloqueos activos se excluyen de los turnos ofrecidos.',
-                                'En el primer mes del club, la ocupación se calcula únicamente desde su fecha de alta en DameCancha.',
-                            ],
-
-                    es_snapshot: true,
-                });
-            } else {
-                setResumen({
-                    ...data,
-                    es_snapshot: false,
-                });
-            }
+            setResumen({
+                ...data,
+                es_snapshot: false,
+            });
         } catch (errorConsulta) {
             console.error(
-                'Error al consultar resumen mensual:',
+                'Error al cargar resumen mensual actual:',
                 errorConsulta
             );
 
@@ -161,35 +186,122 @@ const ResumenMensualClub = ({ idClub }) => {
         }
     };
 
+    useEffect(() => {
+        cargarResumenActual();
+        // El período visible siempre es el actual.
+        // Se vuelve a cargar cuando cambia el club.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [idClub]);
+
     const aniosDisponibles = Array.from(
-        { length: hoy.getFullYear() - 2025 + 1 },
-        (_, index) => hoy.getFullYear() - index
+        {
+            length:
+                Math.max(
+                    anioActual - 2025 + 1,
+                    1
+                ),
+        },
+        (_, index) => anioActual - index
     );
 
+    const periodoPdfCerrado =
+        anioPdf < anioActual ||
+        (
+            anioPdf === anioActual &&
+            mesPdf < mesActual
+        );
 
-    const descargarPdf = () => {
-        if (!resumen?.es_snapshot) {
+    const handleCambiarAnioPdf = (nuevoAnio) => {
+        const anio = Number(nuevoAnio);
+
+        setAnioPdf(anio);
+        setErrorPdf('');
+
+        /*
+            Si se vuelve al año actual y estaba elegido
+            un mes todavía abierto/futuro, lo acomodamos
+            automáticamente al último mes cerrado.
+        */
+        if (
+            anio === anioActual &&
+            mesPdf >= mesActual
+        ) {
+            setMesPdf(
+                mesActual === 1
+                    ? 1
+                    : mesActual - 1
+            );
+        }
+    };
+
+    const descargarPdf = async () => {
+        if (!idClub || !periodoPdfCerrado) {
             return;
         }
 
+        setDescargandoPdf(true);
+        setErrorPdf('');
+
         try {
+            const token = localStorage.getItem('token');
+
+            if (!token) {
+                throw new Error(
+                    'La sesión no está disponible. Cerrá sesión e ingresá nuevamente.'
+                );
+            }
+
+            const response = await fetch(
+                apiUrl(
+                    `/resumen-mensual/club/${idClub}?anio=${anioPdf}&mes=${mesPdf}`
+                ),
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                }
+            );
+
+            const data = await response
+                .json()
+                .catch(() => ({}));
+
+            if (!response.ok) {
+                throw new Error(
+                    obtenerMensajeError(
+                        data,
+                        `No se pudo obtener el resumen cerrado. Error HTTP ${response.status}.`
+                    )
+                );
+            }
+
+            const resumenPdf =
+                normalizarSnapshot(
+                    data,
+                    anioPdf,
+                    mesPdf
+                );
+
             generarResumenMensualPdf({
-                resumen,
+                resumen: resumenPdf,
                 nombreClub:
+                    resumenPdf?.club?.nombre_club ||
                     resumen?.club?.nombre_club ||
                     'Club',
             });
-        } catch (errorPdf) {
+        } catch (errorDescarga) {
             console.error(
                 'Error al generar PDF:',
-                errorPdf
+                errorDescarga
             );
 
-            setError(
-                errorPdf instanceof Error
-                    ? errorPdf.message
+            setErrorPdf(
+                errorDescarga instanceof Error
+                    ? errorDescarga.message
                     : 'No se pudo generar el PDF.'
             );
+        } finally {
+            setDescargandoPdf(false);
         }
     };
 
@@ -200,90 +312,9 @@ const ResumenMensualClub = ({ idClub }) => {
                     <h3>Resumen mensual</h3>
 
                     <small>
-                        Consultá la actividad, ocupación e ingresos registrados
-                        para cada período.
+                        Actividad, ocupación e ingresos registrados del mes actual.
                     </small>
                 </div>
-            </div>
-
-            <div
-                style={{
-                    display: 'flex',
-                    gap: '12px',
-                    flexWrap: 'wrap',
-                    alignItems: 'flex-end',
-                    marginTop: '20px',
-                }}
-            >
-                <div className="pdc-form-group">
-                    <label htmlFor="resumen-mes">Mes</label>
-
-                    <select
-                        id="resumen-mes"
-                        value={mesSeleccionado}
-                        onChange={(e) =>
-                            setMesSeleccionado(Number(e.target.value))
-                        }
-                    >
-                        {MESES.map((nombreMes, index) => (
-                            <option
-                                key={nombreMes}
-                                value={index + 1}
-                            >
-                                {nombreMes}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-
-                <div className="pdc-form-group">
-                    <label htmlFor="resumen-anio">Año</label>
-
-                    <select
-                        id="resumen-anio"
-                        value={anioSeleccionado}
-                        onChange={(e) =>
-                            setAnioSeleccionado(Number(e.target.value))
-                        }
-                    >
-                        {aniosDisponibles.map((anio) => (
-                            <option key={anio} value={anio}>
-                                {anio}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-
-                <button
-                    type="button"
-                    className="pdc-light-button"
-                    onClick={consultarResumen}
-                    disabled={cargando}
-                >
-                    <i className="bi bi-bar-chart-line"></i>
-
-                    {cargando
-                        ? 'Consultando...'
-                        : 'Consultar'}
-                </button>
-
-                {resumen && (
-                    <button
-                        type="button"
-                        className="pdc-light-button"
-                        onClick={descargarPdf}
-                        disabled={!resumen.es_snapshot}
-                        title={
-                            resumen.es_snapshot
-                                ? 'Descargar resumen mensual en PDF'
-                                : 'El PDF estará disponible cuando cierre el mes'
-                        }
-                    >
-                        <i className="bi bi-file-earmark-pdf"></i>
-
-                        Descargar PDF
-                    </button>
-                )}
             </div>
 
             {error && (
@@ -297,14 +328,14 @@ const ResumenMensualClub = ({ idClub }) => {
                 </p>
             )}
 
-            {!resumen && !error && !cargando && (
+            {!resumen && !error && cargando && (
                 <p
                     className="pdc-alert pdc-alert-info"
                     style={{
                         marginTop: '20px',
                     }}
                 >
-                    Seleccioná un período para consultar el resumen del club.
+                    Cargando resumen mensual...
                 </p>
             )}
 
@@ -312,8 +343,8 @@ const ResumenMensualClub = ({ idClub }) => {
                 <div style={{ marginTop: '24px' }}>
                     <div style={{ marginBottom: '18px' }}>
                         <h3>
-                            {MESES[Number(resumen?.periodo?.mes || mesSeleccionado) - 1]}{' '}
-                            {resumen?.periodo?.anio || anioSeleccionado}
+                            {MESES[Number(resumen?.periodo?.mes || mesActual) - 1]}{' '}
+                            {resumen?.periodo?.anio || anioActual}
                         </h3>
 
                         {resumen?.periodo?.ocupacion_desde && (
@@ -324,7 +355,14 @@ const ResumenMensualClub = ({ idClub }) => {
                         )}
                     </div>
 
-                    <section className="pdc-stats-grid">
+                    <section
+                        className="pdc-stats-grid"
+                        style={{
+                            gridTemplateColumns:
+                                'repeat(3, minmax(0, 1fr))',
+                            width: '100%',
+                        }}
+                    >
                         <div className="pdc-stat-card">
                             <div className="pdc-stat-icon pdc-blue">
                                 <i className="bi bi-calendar-check"></i>
@@ -350,60 +388,6 @@ const ResumenMensualClub = ({ idClub }) => {
                         </div>
 
                         <div className="pdc-stat-card">
-                            <div className="pdc-stat-icon pdc-purple">
-                                <i className="bi bi-cash-stack"></i>
-                            </div>
-
-                            <div>
-                                <p>Reservas DameCancha</p>
-
-                                <h3>
-                                    {formatearDinero(
-                                        resumen.monto_reservas_validas
-                                    )}
-                                </h3>
-
-                                <span>Reservas no canceladas</span>
-                            </div>
-                        </div>
-
-                        <div className="pdc-stat-card">
-                            <div className="pdc-stat-icon pdc-orange">
-                                <i className="bi bi-wallet2"></i>
-                            </div>
-
-                            <div>
-                                <p>Ingresos manuales</p>
-
-                                <h3>
-                                    {formatearDinero(
-                                        resumen.ingresos_manuales_total
-                                    )}
-                                </h3>
-
-                                <span>Declarados por el club</span>
-                            </div>
-                        </div>
-
-                        <div className="pdc-stat-card">
-                            <div className="pdc-stat-icon pdc-purple">
-                                <i className="bi bi-graph-up-arrow"></i>
-                            </div>
-
-                            <div>
-                                <p>Total consolidado</p>
-
-                                <h3>
-                                    {formatearDinero(
-                                        resumen.total_consolidado_informado
-                                    )}
-                                </h3>
-
-                                <span>Reservas + ingresos manuales</span>
-                            </div>
-                        </div>
-
-                        <div className="pdc-stat-card">
                             <div className="pdc-stat-icon pdc-blue">
                                 <i className="bi bi-arrow-repeat"></i>
                             </div>
@@ -423,17 +407,216 @@ const ResumenMensualClub = ({ idClub }) => {
                         </div>
                     </section>
 
+                    <section
+                        className="pdc-stats-grid"
+                        style={{
+                            gridTemplateColumns:
+                                'repeat(3, minmax(0, 1fr))',
+                            width: '100%',
+                            marginTop: '12px',
+                        }}
+                    >
+                        <div className="pdc-stat-card">
+                            <div className="pdc-stat-icon pdc-purple">
+                                <i className="bi bi-cash-stack"></i>
+                            </div>
+
+                            <div>
+                                <p>Reservas DameCancha</p>
+
+                                <h3>
+                                    {formatearDinero(
+                                        resumen.monto_reservas_validas
+                                    )}
+                                </h3>
+
+                                <span>Reservas no canceladas</span>
+
+                                <div
+                                    style={{
+                                        marginTop: '10px',
+                                        paddingTop: '9px',
+                                        borderTop:
+                                            '1px solid rgba(255,255,255,0.28)',
+                                        fontSize: '0.82rem',
+                                        lineHeight: '1.6',
+                                    }}
+                                >
+                                    <div>
+                                        <strong>Cobrado:</strong>{' '}
+                                        {formatearDinero(
+                                            resumen.monto_cobrado_total
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <i className="bi bi-cash me-1"></i>
+                                        Efectivo:{' '}
+                                        <strong>
+                                            {formatearDinero(
+                                                resumen.monto_cobrado_efectivo
+                                            )}
+                                        </strong>
+                                    </div>
+
+                                    <div>
+                                        <i className="bi bi-bank me-1"></i>
+                                        Transferencia / electrónico:{' '}
+                                        <strong>
+                                            {formatearDinero(
+                                                resumen.monto_cobrado_electronico
+                                            )}
+                                        </strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="pdc-stat-card">
+                            <div className="pdc-stat-icon pdc-orange">
+                                <i className="bi bi-wallet2"></i>
+                            </div>
+
+                            <div>
+                                <p>Ingresos manuales</p>
+
+                                <h3>
+                                    {formatearDinero(
+                                        resumen.ingresos_manuales_total
+                                    )}
+                                </h3>
+
+                                <span>Declarados por el club</span>
+
+                                <div
+                                    style={{
+                                        marginTop: '10px',
+                                        paddingTop: '9px',
+                                        borderTop:
+                                            '1px solid rgba(255,255,255,0.28)',
+                                        fontSize: '0.82rem',
+                                        lineHeight: '1.6',
+                                    }}
+                                >
+                                    <div>
+                                        <i className="bi bi-cash me-1"></i>
+                                        Efectivo:{' '}
+                                        <strong>
+                                            {formatearDinero(
+                                                resumen.ingresos_manuales_efectivo
+                                            )}
+                                        </strong>
+                                    </div>
+
+                                    <div>
+                                        <i className="bi bi-bank me-1"></i>
+                                        Transferencia / electrónico:{' '}
+                                        <strong>
+                                            {formatearDinero(
+                                                resumen.ingresos_manuales_electronico
+                                            )}
+                                        </strong>
+                                    </div>
+
+                                    {Number(
+                                        resumen.ingresos_manuales_sin_clasificar || 0
+                                    ) > 0 && (
+                                        <div>
+                                            <i className="bi bi-exclamation-triangle me-1"></i>
+                                            Sin clasificar:{' '}
+                                            <strong>
+                                                {formatearDinero(
+                                                    resumen.ingresos_manuales_sin_clasificar
+                                                )}
+                                            </strong>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="pdc-stat-card">
+                            <div className="pdc-stat-icon pdc-purple">
+                                <i className="bi bi-graph-up-arrow"></i>
+                            </div>
+
+                            <div>
+                                <p>Total consolidado</p>
+
+                                <h3>
+                                    {formatearDinero(
+                                        resumen.total_consolidado_informado
+                                    )}
+                                </h3>
+
+                                <span>Reservas + ingresos manuales</span>
+
+                                <div
+                                    style={{
+                                        marginTop: '10px',
+                                        paddingTop: '9px',
+                                        borderTop:
+                                            '1px solid rgba(255,255,255,0.28)',
+                                        fontSize: '0.82rem',
+                                        lineHeight: '1.6',
+                                    }}
+                                >
+                                    <div>
+                                        <strong>Registrado:</strong>{' '}
+                                        {formatearDinero(
+                                            resumen.ingresos_totales_registrados
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <i className="bi bi-cash me-1"></i>
+                                        Efectivo:{' '}
+                                        <strong>
+                                            {formatearDinero(
+                                                resumen.ingresos_totales_efectivo
+                                            )}
+                                        </strong>
+                                    </div>
+
+                                    <div>
+                                        <i className="bi bi-bank me-1"></i>
+                                        Transferencia / electrónico:{' '}
+                                        <strong>
+                                            {formatearDinero(
+                                                resumen.ingresos_totales_electronico
+                                            )}
+                                        </strong>
+                                    </div>
+
+                                    {Number(
+                                        resumen.ingresos_totales_sin_clasificar || 0
+                                    ) > 0 && (
+                                        <div>
+                                            <i className="bi bi-exclamation-triangle me-1"></i>
+                                            Sin clasificar:{' '}
+                                            <strong>
+                                                {formatearDinero(
+                                                    resumen.ingresos_totales_sin_clasificar
+                                                )}
+                                            </strong>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
                     <IngresosManualesClub
                         idClub={idClub}
                         anio={
                             resumen?.periodo?.anio ||
-                            anioSeleccionado
+                            anioActual
                         }
                         mes={
                             resumen?.periodo?.mes ||
-                            mesSeleccionado
+                            mesActual
                         }
-                        onCambio={consultarResumen}
+                        onCambio={cargarResumenActual}
                     />
 
                     <div
@@ -717,6 +900,141 @@ const ResumenMensualClub = ({ idClub }) => {
                                 </div>
                             </div>
                         )}
+
+                    <div
+                        style={{
+                            marginTop: '20px',
+                            padding: '14px 16px',
+                            border:
+                                '1px solid rgba(255,255,255,0.16)',
+                            borderRadius: '10px',
+                        }}
+                    >
+                        <div
+                            style={{
+                                marginBottom: '12px',
+                            }}
+                        >
+                            <strong>
+                                Descargar resumen en PDF
+                            </strong>
+
+                            <small
+                                style={{
+                                    display: 'block',
+                                    marginTop: '3px',
+                                }}
+                            >
+                                Elegí un mes ya cerrado. Esta selección no modifica
+                                la información que ves en pantalla.
+                            </small>
+                        </div>
+
+                        <div
+                            style={{
+                                display: 'flex',
+                                gap: '12px',
+                                flexWrap: 'wrap',
+                                alignItems: 'flex-end',
+                            }}
+                        >
+                            <div className="pdc-form-group">
+                                <label htmlFor="resumen-pdf-mes">
+                                    Mes
+                                </label>
+
+                                <select
+                                    id="resumen-pdf-mes"
+                                    value={mesPdf}
+                                    onChange={(e) => {
+                                        setMesPdf(
+                                            Number(e.target.value)
+                                        );
+                                        setErrorPdf('');
+                                    }}
+                                >
+                                    {MESES.map(
+                                        (nombreMes, index) => {
+                                            const numeroMes =
+                                                index + 1;
+
+                                            const mesNoCerrado =
+                                                anioPdf === anioActual &&
+                                                numeroMes >= mesActual;
+
+                                            return (
+                                                <option
+                                                    key={nombreMes}
+                                                    value={numeroMes}
+                                                    disabled={mesNoCerrado}
+                                                >
+                                                    {nombreMes}
+                                                </option>
+                                            );
+                                        }
+                                    )}
+                                </select>
+                            </div>
+
+                            <div className="pdc-form-group">
+                                <label htmlFor="resumen-pdf-anio">
+                                    Año
+                                </label>
+
+                                <select
+                                    id="resumen-pdf-anio"
+                                    value={anioPdf}
+                                    onChange={(e) =>
+                                        handleCambiarAnioPdf(
+                                            e.target.value
+                                        )
+                                    }
+                                >
+                                    {aniosDisponibles.map((anio) => (
+                                        <option
+                                            key={anio}
+                                            value={anio}
+                                        >
+                                            {anio}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <button
+                                type="button"
+                                className="pdc-light-button"
+                                onClick={descargarPdf}
+                                disabled={
+                                    descargandoPdf ||
+                                    !periodoPdfCerrado
+                                }
+                                title={
+                                    periodoPdfCerrado
+                                        ? 'Descargar resumen mensual cerrado en PDF'
+                                        : 'El PDF está disponible únicamente para meses cerrados'
+                                }
+                            >
+                                <i className="bi bi-file-earmark-pdf"></i>
+
+                                {descargandoPdf
+                                    ? 'Preparando PDF...'
+                                    : 'Descargar PDF'}
+                            </button>
+                        </div>
+
+                        {errorPdf && (
+                            <p
+                                className="pdc-alert pdc-alert-info"
+                                style={{
+                                    marginTop: '12px',
+                                    marginBottom: 0,
+                                }}
+                            >
+                                {errorPdf}
+                            </p>
+                        )}
+                    </div>
 
                     {Array.isArray(resumen.aclaraciones) &&
                         resumen.aclaraciones.length > 0 && (

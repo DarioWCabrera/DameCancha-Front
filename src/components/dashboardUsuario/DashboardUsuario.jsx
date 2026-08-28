@@ -2797,7 +2797,7 @@ function DashboardUsuario({
     const confirmacionTurno = await Swal.fire({
       icon: 'info',
       title: 'Confirmar turno',
-      text: 'El turno deberá abonarse en su totalidad en el club antes de disputar el partido.',
+      text: 'El turno deberá abonarse en su totalidad en el club antes de disputar el partido. Si realizás una transferencia, enviá el comprobante al WhatsApp de la cancha.',
       showCancelButton: true,
       confirmButtonText: 'Sí, confirmar reserva',
       cancelButtonText: 'Volver',

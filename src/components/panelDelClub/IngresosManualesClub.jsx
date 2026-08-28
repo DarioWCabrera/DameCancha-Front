@@ -69,6 +69,7 @@ const IngresosManualesClub = ({
     categoria: 'buffet',
     concepto: '',
     monto: '',
+    metodo_pago: '',
     observaciones: '',
   });
 
@@ -114,6 +115,7 @@ const IngresosManualesClub = ({
       categoria: 'buffet',
       concepto: '',
       monto: '',
+      metodo_pago: '',
       observaciones: '',
     });
 
@@ -127,6 +129,7 @@ const IngresosManualesClub = ({
       categoria: 'buffet',
       concepto: '',
       monto: '',
+      metodo_pago: '',
       observaciones: '',
     });
 
@@ -149,9 +152,13 @@ const IngresosManualesClub = ({
       concepto: ingreso.concepto || '',
       monto:
         ingreso.monto === null ||
-        ingreso.monto === undefined
+          ingreso.monto === undefined
           ? ''
           : String(ingreso.monto),
+
+      metodo_pago:
+        ingreso.metodo_pago || '',
+
       observaciones:
         ingreso.observaciones || '',
     });
@@ -239,6 +246,7 @@ const IngresosManualesClub = ({
       categoria: 'buffet',
       concepto: '',
       monto: '',
+      metodo_pago: '',
       observaciones: '',
     });
   }, [idClub, anio, mes]);
@@ -280,6 +288,16 @@ const IngresosManualesClub = ({
       return;
     }
 
+    if (
+      form.metodo_pago !== 'efectivo' &&
+      form.metodo_pago !== 'electronico'
+    ) {
+      setError(
+        'Seleccioná cómo ingresó el dinero.'
+      );
+      return;
+    }
+
     setGuardando(true);
     setError('');
     setMensaje('');
@@ -301,22 +319,24 @@ const IngresosManualesClub = ({
 
       const body = editando
         ? {
-            fecha: form.fecha,
-            categoria: form.categoria,
-            concepto,
-            monto,
-            observaciones:
-              observaciones || null,
-          }
+          fecha: form.fecha,
+          categoria: form.categoria,
+          concepto,
+          monto,
+          metodo_pago: form.metodo_pago,
+          observaciones:
+            observaciones || null,
+        }
         : {
-            id_club: Number(idClub),
-            fecha: form.fecha,
-            categoria: form.categoria,
-            concepto,
-            monto,
-            observaciones:
-              observaciones || null,
-          };
+          id_club: Number(idClub),
+          fecha: form.fecha,
+          categoria: form.categoria,
+          concepto,
+          monto,
+          metodo_pago: form.metodo_pago,
+          observaciones:
+            observaciones || null,
+        };
 
       const response = await fetch(url, {
         method: editando ? 'PATCH' : 'POST',
@@ -346,9 +366,9 @@ const IngresosManualesClub = ({
 
       setMensaje(
         data?.message ||
-          (editando
-            ? 'Ingreso manual actualizado correctamente.'
-            : 'Ingreso manual registrado correctamente.')
+        (editando
+          ? 'Ingreso manual actualizado correctamente.'
+          : 'Ingreso manual registrado correctamente.')
       );
 
       await cargarIngresos();
@@ -460,7 +480,7 @@ const IngresosManualesClub = ({
 
       setMensaje(
         data?.message ||
-          'Ingreso manual eliminado correctamente.'
+        'Ingreso manual eliminado correctamente.'
       );
 
       await cargarIngresos();
@@ -647,6 +667,37 @@ const IngresosManualesClub = ({
               />
             </div>
 
+            <div className="pdc-form-group">
+              <label htmlFor="ingreso-metodo-pago">
+                Método de ingreso
+              </label>
+
+              <select
+                id="ingreso-metodo-pago"
+                value={form.metodo_pago}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    metodo_pago: e.target.value,
+                  }))
+                }
+                required
+              >
+                <option value="">
+                  Seleccionar...
+                </option>
+
+                <option value="efectivo">
+                  Efectivo
+                </option>
+
+                <option value="electronico">
+                  Transferencia / electrónico
+                </option>
+              </select>
+            </div>
+
+
             <div
               className="pdc-form-group"
               style={{
@@ -814,6 +865,31 @@ const IngresosManualesClub = ({
                     </small>
                   )}
                 </div>
+
+                <span
+                  style={{
+                    minWidth: '190px',
+                    fontSize: '0.88rem',
+                    fontWeight: 600,
+                  }}
+                >
+                  {ingreso.metodo_pago === 'efectivo' ? (
+                    <>
+                      <i className="bi bi-cash me-1"></i>
+                      Efectivo
+                    </>
+                  ) : ingreso.metodo_pago === 'electronico' ? (
+                    <>
+                      <i className="bi bi-bank me-1"></i>
+                      Transferencia / electrónico
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-exclamation-triangle me-1"></i>
+                      Sin clasificar
+                    </>
+                  )}
+                </span>
 
                 <strong
                   style={{
