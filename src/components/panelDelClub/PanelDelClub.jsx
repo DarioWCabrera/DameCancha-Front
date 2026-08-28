@@ -24,6 +24,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
   const [showResumenMensual, setShowResumenMensual] = useState(false);
 
   const [seccionActiva, setSeccionActiva] = useState('inicio');
+  const [menuMobileAbierto, setMenuMobileAbierto] = useState(false);
 
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [noMostrarWelcome, setNoMostrarWelcome] = useState(false);
@@ -5498,6 +5499,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
   const cambiarSeccion = (seccion) => {
     setSeccionActiva(seccion);
+    setMenuMobileAbierto(false);
 
     // Compatibilidad temporal con la estructura actual.
     // Después vamos a retirar estos dos estados cuando terminemos
@@ -5520,7 +5522,22 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
             <h5>Resumen general de tu club</h5>
           </div>
 
-          <div className="pdc-header-actions">
+          <button
+            type="button"
+            className="pdc-mobile-menu-button"
+            onClick={() => setMenuMobileAbierto((abierto) => !abierto)}
+            aria-expanded={menuMobileAbierto}
+            aria-label={menuMobileAbierto ? 'Cerrar menú' : 'Abrir menú'}
+          >
+            <i className={`bi ${menuMobileAbierto ? 'bi-x-lg' : 'bi-list'}`}></i>
+            <span>{menuMobileAbierto ? 'Cerrar' : 'Menú'}</span>
+          </button>
+
+          <div
+            className={`pdc-header-actions ${
+              menuMobileAbierto ? 'pdc-mobile-menu-open' : ''
+            }`}
+          >
             <button
               type="button"
               className="pdc-settings-button"
@@ -5586,7 +5603,10 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
             <button
               type="button"
               className="pdc-pay-button"
-              onClick={abrirModalSuscripcion}
+              onClick={() => {
+                setMenuMobileAbierto(false);
+                abrirModalSuscripcion();
+              }}
               title="Pagar Suscripción"
             >
               <i className="bi bi-credit-card"></i>
@@ -5596,7 +5616,10 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
             <button
               type="button"
               className="pdc-logout-button"
-              onClick={onLogout}
+              onClick={() => {
+                setMenuMobileAbierto(false);
+                onLogout();
+              }}
               title="Cerrar sesión"
             >
               <i className="bi bi-box-arrow-right"></i>

@@ -306,7 +306,7 @@ const ResumenMensualClub = ({ idClub }) => {
     };
 
     return (
-        <section className="pdc-panel">
+        <section className="pdc-panel pdc-monthly-summary">
             <div className="pdc-panel-header">
                 <div>
                     <h3>Resumen mensual</h3>

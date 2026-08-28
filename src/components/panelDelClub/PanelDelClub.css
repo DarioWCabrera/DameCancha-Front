@@ -3650,11 +3650,16 @@
     align-items: stretch !important;
   }
 
-  .pdc-courts-panel,
-  .pdc-upcoming-reservations-panel {
-    height: 500px !important;
-    min-height: 500px !important;
-    max-height: 500px !important;
+  /*
+    CANCHAS:
+    La card crece según la cantidad de canchas hasta aprovechar
+    el alto disponible de la pantalla. Solo aparece scroll interno
+    cuando el contenido supera ese espacio.
+  */
+  .pdc-courts-panel {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: calc(100dvh - 230px) !important;
 
     display: flex;
     flex-direction: column;
@@ -3662,14 +3667,43 @@
     overflow: hidden !important;
   }
 
-  .pdc-courts-panel .pdc-panel-header,
+  .pdc-courts-panel .pdc-panel-header {
+    flex: 0 0 auto;
+  }
+
+  .pdc-courts-list {
+    flex: 0 1 auto;
+    min-height: 0;
+
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    padding-right: 7px;
+  }
+
+  /*
+    RESERVAS:
+    Igual que Canchas: la card crece según la cantidad de reservas
+    hasta aprovechar el alto disponible. Solo aparece scroll interno
+    cuando el contenido supera el espacio útil de la pantalla.
+  */
+  .pdc-upcoming-reservations-panel {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: calc(100dvh - 230px) !important;
+
+    display: flex;
+    flex-direction: column;
+
+    overflow: hidden !important;
+  }
+
   .pdc-upcoming-reservations-panel .pdc-panel-header {
     flex: 0 0 auto;
   }
 
-  .pdc-courts-list,
   .pdc-upcoming-reservations-list {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-height: 0;
 
     overflow-y: auto;
@@ -3787,3 +3821,326 @@
   height: 17px;
   cursor: pointer;
 }
+
+/* =========================================================
+   AJUSTE FINAL DESKTOP - INICIO + RESERVAS
+   ---------------------------------------------------------
+   Objetivo:
+   - El dashboard ocupa exactamente el alto de la ventana.
+   - No hay scroll general de la página en Inicio/Reservas.
+   - La card principal ocupa TODO el espacio vertical restante.
+   - Si el contenido no entra, scrollea solamente la lista interna.
+   - El resto de las pestañas conserva su comportamiento actual.
+========================================================= */
+
+@media (min-width: 1051px) {
+
+  /* Solo aplicamos el modo "pantalla completa" cuando estamos
+     en Inicio (Canchas) o Reservas. */
+  .pdc-owner-dashboard:has(.pdc-courts-panel),
+  .pdc-owner-dashboard:has(.pdc-upcoming-reservations-panel) {
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+
+    /* El padding inferior anterior de 40px provocaba scroll externo. */
+    padding-bottom: 10px !important;
+  }
+
+  .pdc-owner-dashboard:has(.pdc-courts-panel) .pdc-shell,
+  .pdc-owner-dashboard:has(.pdc-upcoming-reservations-panel) .pdc-shell {
+    height: 100% !important;
+    min-height: 0 !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+
+    overflow: hidden !important;
+  }
+
+  /* Header fijo: no se estira ni se achica. */
+  .pdc-owner-dashboard:has(.pdc-courts-panel) .pdc-header,
+  .pdc-owner-dashboard:has(.pdc-upcoming-reservations-panel) .pdc-header {
+    flex: 0 0 auto !important;
+  }
+
+  /* Las métricas de Inicio conservan su altura natural. */
+  .pdc-owner-dashboard:has(.pdc-courts-panel) .pdc-stats-grid {
+    flex: 0 0 auto !important;
+  }
+
+  /* -------------------------------------------------------
+     INICIO - Canchas de tu club
+     Ocupa exactamente lo que queda debajo de las métricas.
+  ------------------------------------------------------- */
+  .pdc-owner-dashboard:has(.pdc-courts-panel) .pdc-courts-panel {
+    flex: 1 1 0 !important;
+
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+
+    overflow: hidden !important;
+  }
+
+  .pdc-owner-dashboard:has(.pdc-courts-panel) .pdc-courts-panel .pdc-panel-header {
+    flex: 0 0 auto !important;
+  }
+
+  .pdc-owner-dashboard:has(.pdc-courts-panel) .pdc-courts-list {
+    flex: 1 1 0 !important;
+
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
+  /* -------------------------------------------------------
+     RESERVAS - Próximas reservas
+     Como no hay métricas arriba, aprovecha todo el espacio
+     desde debajo del header hasta el final de la pantalla.
+  ------------------------------------------------------- */
+  .pdc-owner-dashboard:has(.pdc-upcoming-reservations-panel)
+    .pdc-upcoming-reservations-panel {
+    flex: 1 1 0 !important;
+
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+
+    overflow: hidden !important;
+  }
+
+  .pdc-owner-dashboard:has(.pdc-upcoming-reservations-panel)
+    .pdc-upcoming-reservations-panel
+    .pdc-panel-header {
+    flex: 0 0 auto !important;
+  }
+
+  .pdc-owner-dashboard:has(.pdc-upcoming-reservations-panel)
+    .pdc-upcoming-reservations-list {
+    flex: 1 1 0 !important;
+
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+}
+
+/* =========================================================
+   AJUSTE DESKTOP - CONFIGURACIÓN SIN SCROLL EXTERNO
+   ---------------------------------------------------------
+   Misma regla que Inicio y Reservas:
+   - Dashboard ocupa exactamente el alto de la ventana.
+   - Header queda fijo arriba.
+   - Configuración usa todo el alto restante.
+   - Si el contenido no entra, scrollea dentro de la card.
+========================================================= */
+
+@media (min-width: 1051px) {
+
+  .pdc-owner-dashboard:has(.pdc-settings-section) {
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+    padding-bottom: 10px !important;
+  }
+
+  .pdc-owner-dashboard:has(.pdc-settings-section) .pdc-shell {
+    height: 100% !important;
+    min-height: 0 !important;
+
+    display: flex !important;
+    flex-direction: column !important;
+
+    overflow: hidden !important;
+  }
+
+  .pdc-owner-dashboard:has(.pdc-settings-section) .pdc-header {
+    flex: 0 0 auto !important;
+  }
+
+  .pdc-owner-dashboard:has(.pdc-settings-section) .pdc-settings-section {
+    flex: 1 1 0 !important;
+
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+
+    margin-bottom: 0 !important;
+
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+
+    scrollbar-gutter: stable;
+  }
+}
+
+/* =========================================================
+   MOBILE - MENÚ HAMBURGUESA DEL PANEL
+========================================================= */
+
+.pdc-mobile-menu-button {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .pdc-header {
+    position: relative;
+    gap: 12px;
+  }
+
+  .pdc-main-title {
+    padding-right: 112px;
+  }
+
+  .pdc-mobile-menu-button {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 5;
+
+    min-width: 98px;
+    height: 48px;
+    padding: 0 14px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 12px;
+    background: #ff8a1a;
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 900;
+    line-height: 1;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+    cursor: pointer;
+  }
+
+  .pdc-mobile-menu-button i {
+    font-size: 1.35rem;
+  }
+
+  /* Cerrado por defecto en celular. */
+  .pdc-header-actions {
+    display: none !important;
+    width: 100%;
+    margin-top: 2px;
+  }
+
+  /* Se despliega solo al tocar Menú. */
+  .pdc-header-actions.pdc-mobile-menu-open {
+    display: grid !important;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .pdc-header-actions.pdc-mobile-menu-open .pdc-settings-button,
+  .pdc-header-actions.pdc-mobile-menu-open .pdc-pay-button,
+  .pdc-header-actions.pdc-mobile-menu-open .pdc-logout-button {
+    width: 100%;
+    min-height: 48px;
+  }
+}
+
+/* =========================================================
+   MOBILE - RESUMEN MENSUAL RESPONSIVE
+   Las dos filas de 3 cards pasan a una sola columna.
+   El !important anula el grid de 3 columnas que llega inline
+   desde el componente exclusivamente en pantallas chicas.
+========================================================= */
+
+.pdc-monthly-summary .pdc-stat-card > div:last-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .pdc-monthly-summary {
+    padding: 14px !important;
+    overflow-x: hidden !important;
+  }
+
+  .pdc-monthly-summary .pdc-panel-header {
+    padding: 0 4px 12px !important;
+    align-items: flex-start;
+  }
+
+  .pdc-monthly-summary .pdc-panel-header h3 {
+    font-size: 1.35rem;
+  }
+
+  .pdc-monthly-summary .pdc-panel-header small {
+    display: block;
+    margin-top: 6px;
+    line-height: 1.45;
+  }
+
+  .pdc-monthly-summary .pdc-stats-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+    gap: 12px !important;
+  }
+
+  .pdc-monthly-summary .pdc-stat-card {
+    width: 100%;
+    min-width: 0;
+    min-height: 110px;
+    padding: 16px;
+
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    align-items: start;
+    gap: 14px;
+  }
+
+  .pdc-monthly-summary .pdc-stat-icon {
+    width: 56px;
+    min-width: 56px;
+    height: 56px;
+    font-size: 1.5rem;
+  }
+
+  .pdc-monthly-summary .pdc-stat-card p,
+  .pdc-monthly-summary .pdc-stat-card h3,
+  .pdc-monthly-summary .pdc-stat-card span,
+  .pdc-monthly-summary .pdc-stat-card div {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .pdc-monthly-summary .pdc-stat-card p {
+    font-size: 0.95rem;
+  }
+
+  .pdc-monthly-summary .pdc-stat-card h3 {
+    font-size: 1.45rem;
+    line-height: 1.15;
+  }
+
+  .pdc-monthly-summary .pdc-stat-card span {
+    display: block;
+    font-size: 0.84rem;
+    line-height: 1.45;
+  }
+}
+
