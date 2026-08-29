@@ -9,7 +9,7 @@ const value = (key) => String(import.meta.env[key] || '').trim();
  */
 export const CONTACT = {
   email: value('VITE_SUPPORT_EMAIL') || 'damecancha.tsas@gmail.com',
-  phone: value('VITE_SUPPORT_PHONE') || '2983 419423',
+  phone: value('VITE_SUPPORT_PHONE') || '2983 616090',
   whatsapp: value('VITE_SUPPORT_WHATSAPP') || '5492983616090',
   instagramUrl:
     value('VITE_INSTAGRAM_URL') || 'https://www.instagram.com/damecanchas?igsi=czN4NRlN3d6cXh0/',

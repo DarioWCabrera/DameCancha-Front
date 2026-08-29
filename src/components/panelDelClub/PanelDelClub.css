@@ -4180,3 +4180,46 @@
   cursor: not-allowed;
   transform: none;
 }
+
+/* =========================================================
+   FIX MOBILE - MODAL DE BIENVENIDA SCROLLEABLE
+========================================================= */
+
+@media (max-width: 768px) {
+  .pdc-welcome-modal-backdrop {
+    align-items: flex-start;
+    overflow-y: auto;
+    padding: 12px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .pdc-welcome-modal {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    margin: 0 auto;
+
+    padding: 30px 20px 22px;
+
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .pdc-welcome-modal h2 {
+    font-size: 1.5rem;
+  }
+
+  .pdc-welcome-modal-box {
+    margin: 14px 0;
+    padding: 15px;
+  }
+
+  .pdc-welcome-modal-actions {
+    flex-direction: column;
+  }
+
+  .pdc-welcome-modal-primary,
+  .pdc-welcome-modal-secondary {
+    width: 100%;
+  }
+}
