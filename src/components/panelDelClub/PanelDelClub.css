@@ -4144,3 +4144,39 @@
   }
 }
 
+.pdc-turno-fijo-cancel-btn {
+  border: 1px solid rgba(255, 120, 120, 0.65);
+  background: rgba(255, 90, 90, 0.10);
+  color: #ff9a9a;
+  border-radius: 999px;
+  padding: 6px 12px;
+  min-height: 32px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+
+  box-shadow: none;
+  transition: all 0.2s ease;
+}
+
+.pdc-turno-fijo-cancel-btn:hover {
+  background: rgba(255, 90, 90, 0.18);
+  border-color: rgba(255, 120, 120, 0.9);
+  color: #ffb3b3;
+  transform: translateY(-1px);
+}
+
+.pdc-turno-fijo-cancel-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}

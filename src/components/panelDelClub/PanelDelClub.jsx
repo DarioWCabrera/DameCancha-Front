@@ -35,6 +35,13 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
   const [reservasCanceladasLocal, setReservasCanceladasLocal] = useState([]);
 
   /*
+    Reservas cargadas manualmente por el club durante esta sesión.
+    Se mezclan con las reservas recibidas por props para que aparezcan
+    inmediatamente en próximas reservas, calendario y métricas.
+  */
+  const [reservasManualesLocal, setReservasManualesLocal] = useState([]);
+
+  /*
     Alias internos de clientes por club.
     - El nombre real del usuario nunca se modifica.
     - El alias pertenece solamente al club.
@@ -1578,6 +1585,137 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
       await Swal.fire({
         icon: 'error',
         title: 'No se pudo rechazar',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    } finally {
+      setProcesandoTurnoFijoId(null);
+    }
+  };
+
+  const handleFinalizarTurnoFijo = async (turno) => {
+    if (!turno?.id_turno_fijo) return;
+
+    const cliente = obtenerClienteTurnoFijo(turno);
+
+    const nombreDia =
+      NOMBRES_DIAS_TURNO_FIJO[
+        Number(turno.dia_semana)
+      ] || 'Día';
+
+    const horaInicio =
+      normalizarHoraTurnoFijo(turno.hora_inicio);
+
+    const horaFin =
+      normalizarHoraTurnoFijo(turno.hora_fin);
+
+    const resultado = await Swal.fire({
+      icon: 'warning',
+      title: 'Cancelar turno fijo',
+      html: `
+        <div style="text-align:left;line-height:1.5;">
+          <p style="margin:0 0 8px;">
+            Vas a cancelar el turno fijo de:
+          </p>
+
+          <p style="margin:0 0 4px;">
+            <strong>${cliente.nombre}</strong>
+          </p>
+
+          <p style="margin:0 0 4px;">
+            ${turno.deporte?.nombre_deporte || 'Deporte'} ·
+            ${nombreDia} ${horaInicio} a ${horaFin}
+          </p>
+
+          <p style="margin:0 0 14px;">
+            ${turno.cancha?.nombre_cancha || 'Cancha sin identificar'}
+          </p>
+
+          <p style="margin:0;">
+            Al confirmarlo, el turno dejará de estar activo y
+            <strong>ese horario volverá a quedar disponible</strong>
+            para futuras reservas.
+          </p>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: 'Sí, cancelar turno fijo',
+      cancelButtonText: 'Volver',
+      confirmButtonColor: '#dc3545',
+      cancelButtonColor: '#64748b',
+      reverseButtons: true,
+      focusCancel: true,
+    });
+
+    if (!resultado.isConfirmed) return;
+
+    setProcesandoTurnoFijoId(
+      turno.id_turno_fijo
+    );
+
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        throw new Error(
+          'La sesión no está disponible. Cerrá sesión e ingresá nuevamente.'
+        );
+      }
+
+      const response = await fetch(
+        apiUrl(
+          `/turno-fijo/${turno.id_turno_fijo}/finalizar`
+        ),
+        {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const data = await response
+        .json()
+        .catch(() => ({}));
+
+      if (!response.ok) {
+        const mensaje = Array.isArray(data?.message)
+          ? data.message.join(' ')
+          : data?.message;
+
+        throw new Error(
+          mensaje ||
+          'No se pudo cancelar el turno fijo.'
+        );
+      }
+
+      /*
+        El listado del panel solo muestra turnos activos.
+        Al recargarlo, el turno recién cancelado desaparece
+        automáticamente sin borrar su historial de la base.
+      */
+      await cargarTurnosFijosClub();
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Turno fijo cancelado',
+        text: 'El turno dejó de estar activo y el horario volvió a quedar disponible.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+    } catch (error) {
+      console.error(
+        'Error al cancelar turno fijo:',
+        error
+      );
+
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo cancelar',
         text:
           error instanceof Error
             ? error.message
@@ -3905,8 +4043,9 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
     return String(
       reserva?.cliente_nombre ||
+      reserva?.nombre_cliente_manual ||
       nombreDesdeUsuario ||
-      'Usuario'
+      'Cliente'
     ).trim();
   };
 
@@ -4923,7 +5062,21 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     Conservamos también las canceladas para poder calcular el historial de
     cancelaciones por usuario, pero las excluimos de las métricas y agendas activas.
   */
-  const reservasDelClub = reservas.filter((reserva) => {
+  const reservasCombinadas = [
+    ...reservas.filter((reserva) => {
+      const idReserva = obtenerIdReserva(reserva);
+
+      if (!idReserva) return true;
+
+      return !reservasManualesLocal.some(
+        (local) =>
+          String(obtenerIdReserva(local)) === String(idReserva)
+      );
+    }),
+    ...reservasManualesLocal,
+  ];
+
+  const reservasDelClub = reservasCombinadas.filter((reserva) => {
     const idReserva = obtenerIdReserva(reserva);
     return !idReserva || !reservasCanceladasLocal.includes(String(idReserva));
   });
@@ -5099,12 +5252,14 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
       const nombre = String(
         reserva?.cliente_nombre ||
+        reserva?.nombre_cliente_manual ||
         nombreDesdeUsuario ||
         `Usuario ${idUsuario}`
       ).trim();
 
       const telefono = String(
         reserva?.cliente_telefono ||
+        reserva?.telefono_cliente_manual ||
         reserva?.usuario?.telefono_usuario ||
         ''
       ).trim();
@@ -5124,6 +5279,960 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
       })
     );
   };
+
+  const handleNuevaReservaManual = async () => {
+    if (!idClubActual) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'Club no disponible',
+        text: 'No se pudo identificar el club.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+      return;
+    }
+
+    if (!canchas.length) {
+      await Swal.fire({
+        icon: 'warning',
+        title: 'No hay canchas disponibles',
+        text: 'El club necesita al menos una cancha activa para cargar una reserva.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      await Swal.fire({
+        icon: 'error',
+        title: 'Sesión no disponible',
+        text: 'Cerrá sesión e ingresá nuevamente.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+      return;
+    }
+
+    const clientesRegistrados =
+      obtenerClientesRegistradosDelClub();
+
+    const opcionesClientes = clientesRegistrados
+      .map((cliente) => {
+        const detalleTelefono = cliente.telefono
+          ? ` · ${cliente.telefono}`
+          : '';
+
+        return `
+          <option value="${cliente.id_usuario}">
+            ${escaparHtmlTurnoFijo(
+              cliente.nombre + detalleTelefono
+            )}
+          </option>
+        `;
+      })
+      .join('');
+
+    const opcionesCanchas = canchas
+      .map((cancha) => {
+        const idCancha = Number(getCanchaId(cancha));
+
+        const nombre =
+          cancha?.nombre_cancha ||
+          cancha?.nombre ||
+          `Cancha ${idCancha}`;
+
+        const deporte =
+          cancha?.id_deporte?.nombre_deporte ||
+          cancha?.deporte?.nombre_deporte ||
+          '';
+
+        return `
+          <option value="${idCancha}">
+            ${escaparHtmlTurnoFijo(
+              deporte
+                ? `${nombre} · ${deporte}`
+                : nombre
+            )}
+          </option>
+        `;
+      })
+      .join('');
+
+    const hoyArgentina = new Intl.DateTimeFormat(
+      'en-CA',
+      {
+        timeZone: 'America/Argentina/Buenos_Aires',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }
+    ).format(new Date());
+
+    const resultado = await Swal.fire({
+      icon: 'info',
+      title: 'Nueva reserva',
+      width: 650,
+      html: `
+        <div style="text-align:left;line-height:1.4;">
+          <p style="margin:0 0 16px;color:#475569;">
+            Cargá una reserva recibida por teléfono, WhatsApp o en el club.
+            El sistema validará el horario antes de guardarla.
+          </p>
+
+          <label
+            for="reserva-manual-tipo-cliente"
+            style="display:block;font-weight:700;margin-bottom:6px;"
+          >
+            Cliente
+          </label>
+
+          <select
+            id="reserva-manual-tipo-cliente"
+            class="swal2-select"
+            style="display:block;width:100%;margin:0 0 12px;"
+          >
+            ${
+              clientesRegistrados.length > 0
+                ? '<option value="registrado">Usuario registrado que ya reservó en el club</option>'
+                : ''
+            }
+            <option value="externo">Cliente externo / sin cuenta</option>
+          </select>
+
+          <div id="reserva-manual-registrado">
+            <label
+              for="reserva-manual-usuario"
+              style="display:block;font-weight:700;margin-bottom:6px;"
+            >
+              Usuario
+            </label>
+
+            <select
+              id="reserva-manual-usuario"
+              class="swal2-select"
+              style="display:block;width:100%;margin:0 0 5px;"
+            >
+              ${opcionesClientes}
+            </select>
+
+            <small style="display:block;margin:0 0 14px;color:#64748b;">
+              Se muestran usuarios que ya tuvieron una reserva en este club.
+            </small>
+          </div>
+
+          <div id="reserva-manual-externo">
+            <label
+              for="reserva-manual-nombre"
+              style="display:block;font-weight:700;margin-bottom:6px;"
+            >
+              Nombre del cliente
+            </label>
+
+            <input
+              id="reserva-manual-nombre"
+              type="text"
+              maxlength="160"
+              class="swal2-input"
+              placeholder="Ej: Carlos Pérez"
+              style="display:block;width:100%;margin:0 0 12px;"
+            />
+
+            <label
+              for="reserva-manual-telefono"
+              style="display:block;font-weight:700;margin-bottom:6px;"
+            >
+              Teléfono
+            </label>
+
+            <input
+              id="reserva-manual-telefono"
+              type="text"
+              maxlength="30"
+              class="swal2-input"
+              placeholder="Ej: 2983123456"
+              style="display:block;width:100%;margin:0 0 14px;"
+            />
+          </div>
+
+          <label
+            for="reserva-manual-cancha"
+            style="display:block;font-weight:700;margin-bottom:6px;"
+          >
+            Cancha
+          </label>
+
+          <select
+            id="reserva-manual-cancha"
+            class="swal2-select"
+            style="display:block;width:100%;margin:0 0 12px;"
+          >
+            <option value="">Elegí una cancha</option>
+            ${opcionesCanchas}
+          </select>
+
+          <label
+            for="reserva-manual-fecha"
+            style="display:block;font-weight:700;margin-bottom:6px;"
+          >
+            Fecha
+          </label>
+
+          <input
+            id="reserva-manual-fecha"
+            type="date"
+            min="${hoyArgentina}"
+            class="swal2-input"
+            style="display:block;width:100%;margin:0 0 12px;"
+          />
+
+          <label
+            for="reserva-manual-horario"
+            style="display:block;font-weight:700;margin-bottom:6px;"
+          >
+            Horario disponible
+          </label>
+
+          <select
+            id="reserva-manual-horario"
+            class="swal2-select"
+            style="display:block;width:100%;margin:0;"
+            disabled
+          >
+            <option value="">
+              Elegí primero una cancha y una fecha
+            </option>
+          </select>
+
+          <small
+            id="reserva-manual-horario-ayuda"
+            style="display:block;margin:6px 0 0;color:#64748b;"
+          >
+            Solo se mostrarán turnos configurados que estén libres.
+          </small>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: 'Crear reserva',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#16a34a',
+      cancelButtonColor: '#64748b',
+      reverseButtons: true,
+
+      didOpen: () => {
+        const popup = Swal.getPopup();
+
+        if (!popup) return;
+
+        const tipoCliente =
+          popup.querySelector(
+            '#reserva-manual-tipo-cliente'
+          );
+
+        const bloqueRegistrado =
+          popup.querySelector(
+            '#reserva-manual-registrado'
+          );
+
+        const bloqueExterno =
+          popup.querySelector(
+            '#reserva-manual-externo'
+          );
+
+        const canchaSelect =
+          popup.querySelector(
+            '#reserva-manual-cancha'
+          );
+
+        const fechaInput =
+          popup.querySelector(
+            '#reserva-manual-fecha'
+          );
+
+        const horarioSelect =
+          popup.querySelector(
+            '#reserva-manual-horario'
+          );
+
+        const ayudaHorario =
+          popup.querySelector(
+            '#reserva-manual-horario-ayuda'
+          );
+
+        const actualizarTipoCliente = () => {
+          const esRegistrado =
+            tipoCliente?.value === 'registrado';
+
+          if (bloqueRegistrado) {
+            bloqueRegistrado.style.display =
+              esRegistrado ? 'block' : 'none';
+          }
+
+          if (bloqueExterno) {
+            bloqueExterno.style.display =
+              esRegistrado ? 'none' : 'block';
+          }
+        };
+
+        const minutosHora = (hora) => {
+          const [h, m] = String(hora)
+            .slice(0, 5)
+            .split(':')
+            .map(Number);
+
+          return h * 60 + m;
+        };
+
+        const normalizarHoraLocal = (hora) =>
+          String(hora || '').slice(0, 5);
+
+        const obtenerDiaSemana = (fecha) => {
+          const [anio, mes, dia] =
+            String(fecha)
+              .split('-')
+              .map(Number);
+
+          return new Date(
+            Date.UTC(anio, mes - 1, dia)
+          ).getUTCDay();
+        };
+
+        const generarSlotsDefault = () => {
+          const slots = [];
+
+          for (let hora = 9; hora <= 22; hora += 1) {
+            const inicio =
+              `${String(hora).padStart(2, '0')}:00`;
+
+            const fin =
+              `${String(hora + 1).padStart(2, '0')}:00`;
+
+            slots.push({
+              dia_semana: null,
+              hora_inicio: inicio,
+              hora_fin: fin,
+            });
+          }
+
+          return slots;
+        };
+
+        const cargarHorarios = async () => {
+          const idCancha =
+            Number(canchaSelect?.value);
+
+          const fecha =
+            String(fechaInput?.value || '');
+
+          if (
+            !Number.isInteger(idCancha) ||
+            idCancha <= 0 ||
+            !fecha
+          ) {
+            if (horarioSelect) {
+              horarioSelect.innerHTML = `
+                <option value="">
+                  Elegí primero una cancha y una fecha
+                </option>
+              `;
+              horarioSelect.disabled = true;
+            }
+
+            return;
+          }
+
+          if (horarioSelect) {
+            horarioSelect.disabled = true;
+            horarioSelect.innerHTML = `
+              <option value="">
+                Cargando horarios...
+              </option>
+            `;
+          }
+
+          if (ayudaHorario) {
+            ayudaHorario.textContent =
+              'Consultando disponibilidad real...';
+          }
+
+          try {
+            const [
+              configResponse,
+              ocupacionesResponse,
+            ] = await Promise.all([
+              fetch(
+                apiUrl(
+                  `/disponibilidad/cancha/${idCancha}`
+                ),
+                {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                  },
+                }
+              ),
+              fetch(
+                apiUrl(
+                  `/reserva/disponibilidad/${idCancha}/${fecha}`
+                ),
+                {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                  },
+                }
+              ),
+            ]);
+
+            const configuraciones =
+              configResponse.ok
+                ? await configResponse
+                    .json()
+                    .catch(() => [])
+                : [];
+
+            const ocupaciones =
+              ocupacionesResponse.ok
+                ? await ocupacionesResponse
+                    .json()
+                    .catch(() => [])
+                : [];
+
+            if (!ocupacionesResponse.ok) {
+              const mensaje =
+                Array.isArray(ocupaciones?.message)
+                  ? ocupaciones.message.join(' ')
+                  : ocupaciones?.message;
+
+              throw new Error(
+                mensaje ||
+                'No se pudo consultar la disponibilidad.'
+              );
+            }
+
+            const diaSemana =
+              obtenerDiaSemana(fecha);
+
+            const slotsConfigurados =
+              Array.isArray(configuraciones) &&
+              configuraciones.length > 0
+                ? configuraciones.filter(
+                    (slot) =>
+                      Number(slot.dia_semana) ===
+                      diaSemana
+                  )
+                : generarSlotsDefault();
+
+            const slotsLibres =
+              slotsConfigurados.filter((slot) => {
+                const inicio =
+                  normalizarHoraLocal(
+                    slot.hora_inicio
+                  );
+
+                const fin =
+                  normalizarHoraLocal(
+                    slot.hora_fin
+                  );
+
+                if (!inicio || !fin) return false;
+
+                const inicioMin =
+                  minutosHora(inicio);
+
+                const finMin =
+                  minutosHora(fin);
+
+                const ocupado =
+                  Array.isArray(ocupaciones) &&
+                  ocupaciones.some(
+                    (ocupacion) => {
+                      const ocupadoInicio =
+                        minutosHora(
+                          normalizarHoraLocal(
+                            ocupacion.hora_inicio
+                          )
+                        );
+
+                      const ocupadoFin =
+                        minutosHora(
+                          normalizarHoraLocal(
+                            ocupacion.hora_fin
+                          )
+                        );
+
+                      return (
+                        ocupadoInicio < finMin &&
+                        ocupadoFin > inicioMin
+                      );
+                    }
+                  );
+
+                return !ocupado;
+              });
+
+            if (!slotsLibres.length) {
+              if (horarioSelect) {
+                horarioSelect.innerHTML = `
+                  <option value="">
+                    No hay horarios libres para ese día
+                  </option>
+                `;
+                horarioSelect.disabled = true;
+              }
+
+              if (ayudaHorario) {
+                ayudaHorario.textContent =
+                  'Probá con otra cancha o fecha.';
+              }
+
+              return;
+            }
+
+            if (horarioSelect) {
+              horarioSelect.innerHTML = `
+                <option value="">
+                  Elegí un horario
+                </option>
+                ${slotsLibres
+                  .map((slot) => {
+                    const inicio =
+                      normalizarHoraLocal(
+                        slot.hora_inicio
+                      );
+
+                    const fin =
+                      normalizarHoraLocal(
+                        slot.hora_fin
+                      );
+
+                    return `
+                      <option
+                        value="${inicio}|${fin}"
+                      >
+                        ${inicio} a ${fin}
+                      </option>
+                    `;
+                  })
+                  .join('')}
+              `;
+
+              horarioSelect.disabled = false;
+            }
+
+            if (ayudaHorario) {
+              ayudaHorario.textContent =
+                `${slotsLibres.length} horario${
+                  slotsLibres.length === 1
+                    ? ''
+                    : 's'
+                } disponible${
+                  slotsLibres.length === 1
+                    ? ''
+                    : 's'
+                }.`;
+            }
+          } catch (error) {
+            console.error(
+              'Error al consultar horarios para reserva manual:',
+              error
+            );
+
+            if (horarioSelect) {
+              horarioSelect.innerHTML = `
+                <option value="">
+                  No se pudieron cargar los horarios
+                </option>
+              `;
+              horarioSelect.disabled = true;
+            }
+
+            if (ayudaHorario) {
+              ayudaHorario.textContent =
+                error instanceof Error
+                  ? error.message
+                  : 'Intentá nuevamente.';
+            }
+          }
+        };
+
+        tipoCliente?.addEventListener(
+          'change',
+          actualizarTipoCliente
+        );
+
+        canchaSelect?.addEventListener(
+          'change',
+          cargarHorarios
+        );
+
+        fechaInput?.addEventListener(
+          'change',
+          cargarHorarios
+        );
+
+        actualizarTipoCliente();
+      },
+
+      preConfirm: () => {
+        const popup = Swal.getPopup();
+
+        const tipoCliente =
+          popup?.querySelector(
+            '#reserva-manual-tipo-cliente'
+          )?.value;
+
+        const idUsuario =
+          Number(
+            popup?.querySelector(
+              '#reserva-manual-usuario'
+            )?.value
+          );
+
+        const nombreCliente =
+          String(
+            popup?.querySelector(
+              '#reserva-manual-nombre'
+            )?.value || ''
+          ).trim();
+
+        const telefonoCliente =
+          String(
+            popup?.querySelector(
+              '#reserva-manual-telefono'
+            )?.value || ''
+          ).trim();
+
+        const idCancha =
+          Number(
+            popup?.querySelector(
+              '#reserva-manual-cancha'
+            )?.value
+          );
+
+        const fecha =
+          String(
+            popup?.querySelector(
+              '#reserva-manual-fecha'
+            )?.value || ''
+          ).trim();
+
+        const horario =
+          String(
+            popup?.querySelector(
+              '#reserva-manual-horario'
+            )?.value || ''
+          );
+
+        const [
+          horaInicio,
+          horaFin,
+        ] = horario.split('|');
+
+        if (
+          tipoCliente === 'registrado' &&
+          (!Number.isInteger(idUsuario) ||
+            idUsuario <= 0)
+        ) {
+          Swal.showValidationMessage(
+            'Elegí un usuario registrado.'
+          );
+          return false;
+        }
+
+        if (
+          tipoCliente !== 'registrado' &&
+          nombreCliente.length < 2
+        ) {
+          Swal.showValidationMessage(
+            'Escribí el nombre del cliente.'
+          );
+          return false;
+        }
+
+        if (
+          !Number.isInteger(idCancha) ||
+          idCancha <= 0
+        ) {
+          Swal.showValidationMessage(
+            'Elegí una cancha.'
+          );
+          return false;
+        }
+
+        if (!fecha) {
+          Swal.showValidationMessage(
+            'Elegí una fecha.'
+          );
+          return false;
+        }
+
+        if (!horaInicio || !horaFin) {
+          Swal.showValidationMessage(
+            'Elegí un horario disponible.'
+          );
+          return false;
+        }
+
+        return {
+          tipoCliente,
+          idUsuario:
+            tipoCliente === 'registrado'
+              ? idUsuario
+              : null,
+          nombreCliente:
+            tipoCliente === 'registrado'
+              ? ''
+              : nombreCliente,
+          telefonoCliente:
+            tipoCliente === 'registrado'
+              ? ''
+              : telefonoCliente,
+          idCancha,
+          fecha,
+          horaInicio,
+          horaFin,
+        };
+      },
+    });
+
+    if (!resultado.isConfirmed || !resultado.value) {
+      return;
+    }
+
+    const datos = resultado.value;
+
+    try {
+      Swal.fire({
+        title: 'Creando reserva...',
+        text: 'Validando el horario.',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        didOpen: () => {
+          Swal.showLoading();
+        },
+      });
+
+      const payload = {
+        id_cancha: datos.idCancha,
+        fecha: datos.fecha,
+        hora_inicio: datos.horaInicio,
+        hora_fin: datos.horaFin,
+      };
+
+      if (datos.tipoCliente === 'registrado') {
+        payload.id_usuario = datos.idUsuario;
+      } else {
+        payload.nombre_cliente =
+          datos.nombreCliente;
+
+        if (datos.telefonoCliente) {
+          payload.telefono_cliente =
+            datos.telefonoCliente;
+        }
+      }
+
+      const response = await fetch(
+        apiUrl('/reserva/manual'),
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = await response
+        .json()
+        .catch(() => ({}));
+
+      if (!response.ok) {
+        const mensaje =
+          Array.isArray(data?.message)
+            ? data.message.join(' ')
+            : data?.message;
+
+        throw new Error(
+          mensaje ||
+          `No se pudo crear la reserva. Error HTTP ${response.status}.`
+        );
+      }
+
+      const usuarioReserva =
+        data?.usuario || null;
+
+      const nombreUsuario = [
+        usuarioReserva?.nombre_usuario,
+        usuarioReserva?.apellido_usuario,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+
+      const canchaRespuesta =
+        data?.cancha || {};
+
+      const nuevaReservaVista = {
+        id:
+          data?.id_reserva ||
+          Date.now(),
+
+        id_reserva:
+          data?.id_reserva ||
+          null,
+
+        id_cancha:
+          canchaRespuesta?.id_cancha ||
+          datos.idCancha,
+
+        id_usuario:
+          usuarioReserva?.id_usuario ||
+          datos.idUsuario ||
+          null,
+
+        usuario:
+          usuarioReserva,
+
+        deporte:
+          canchaRespuesta?.id_deporte
+            ?.nombre_deporte ||
+          canchaRespuesta?.deporte
+            ?.nombre_deporte ||
+          'Deporte',
+
+        club:
+          canchaRespuesta?.id_club
+            ?.nombre_club ||
+          canchaRespuesta?.club
+            ?.nombre_club ||
+          clubPrincipal?.nombre_club ||
+          'Club',
+
+        cancha:
+          canchaRespuesta?.nombre_cancha ||
+          canchas.find(
+            (cancha) =>
+              Number(getCanchaId(cancha)) ===
+              Number(datos.idCancha)
+          )?.nombre_cancha ||
+          'Cancha',
+
+        fecha:
+          data?.fecha ||
+          datos.fecha,
+
+        hora:
+          String(
+            data?.hora_inicio ||
+            datos.horaInicio
+          ).slice(0, 5),
+
+        hora_inicio:
+          data?.hora_inicio ||
+          datos.horaInicio,
+
+        hora_fin:
+          data?.hora_fin ||
+          datos.horaFin,
+
+        estado:
+          data?.estado ||
+          'confirmada',
+
+        precio:
+          data?.monto_total || 0,
+
+        monto_total:
+          data?.monto_total || 0,
+
+        cliente_nombre:
+          data?.nombre_cliente_manual ||
+          nombreUsuario ||
+          datos.nombreCliente ||
+          'Cliente',
+
+        cliente_telefono:
+          data?.telefono_cliente_manual ||
+          usuarioReserva?.telefono_usuario ||
+          datos.telefonoCliente ||
+          '',
+
+        nombre_cliente_manual:
+          data?.nombre_cliente_manual ||
+          null,
+
+        telefono_cliente_manual:
+          data?.telefono_cliente_manual ||
+          null,
+
+        origen_reserva:
+          data?.origen_reserva ||
+          'club',
+      };
+
+      setReservasManualesLocal((prev) => [
+        ...prev.filter(
+          (reserva) =>
+            String(
+              obtenerIdReserva(reserva)
+            ) !==
+            String(
+              obtenerIdReserva(
+                nuevaReservaVista
+              )
+            )
+        ),
+        nuevaReservaVista,
+      ]);
+
+      await Swal.fire({
+        icon: 'success',
+        title: 'Reserva creada',
+        html: `
+          <p style="margin:0 0 6px;">
+            <strong>${escaparHtmlTurnoFijo(
+              nuevaReservaVista.cliente_nombre
+            )}</strong>
+          </p>
+
+          <p style="margin:0;">
+            ${escaparHtmlTurnoFijo(
+              nuevaReservaVista.cancha
+            )} ·
+            ${escaparHtmlTurnoFijo(
+              formatearFecha(
+                nuevaReservaVista.fecha
+              )
+            )} ·
+            ${escaparHtmlTurnoFijo(
+              nuevaReservaVista.hora
+            )} hs
+          </p>
+        `,
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#087bff',
+      });
+    } catch (error) {
+      console.error(
+        'Error al crear reserva manual:',
+        error
+      );
+
+      await Swal.fire({
+        icon: 'error',
+        title: 'No se pudo crear la reserva',
+        text:
+          error instanceof Error
+            ? error.message
+            : 'Ocurrió un error inesperado.',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#ef4444',
+      });
+    }
+  };
+
 
   const handleNuevoTurnoFijoManual = async () => {
     if (!idClubActual) {
@@ -7043,13 +8152,34 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                 <div className="pdc-panel-header">
                   <h3>Próximas reservas</h3>
 
-                  <button
-                    className="pdc-light-button"
-                    onClick={() => setShowCalendar(!showCalendar)}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'flex-end',
+                      gap: '10px',
+                      flexWrap: 'wrap',
+                    }}
                   >
-                    {showCalendar ? 'Ocultar calendario' : 'Ver calendario'}
-                    <i className="bi bi-calendar-event"></i>
-                  </button>
+                    <button
+                      type="button"
+                      className="pdc-light-button"
+                      onClick={handleNuevaReservaManual}
+                      disabled={!canchas.length}
+                    >
+                      <i className="bi bi-plus-circle"></i>
+                      Nueva reserva
+                    </button>
+
+                    <button
+                      type="button"
+                      className="pdc-light-button"
+                      onClick={() => setShowCalendar(!showCalendar)}
+                    >
+                      {showCalendar ? 'Ocultar calendario' : 'Ver calendario'}
+                      <i className="bi bi-calendar-event"></i>
+                    </button>
+                  </div>
                 </div>
 
                 {reservasProximas.length === 0 ? (
@@ -7123,10 +8253,17 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                               </div>
                             )}
 
-                            {reserva.cliente_telefono && (
-                              <a href={`tel:${reserva.cliente_telefono}`}>
+                            {(reserva.cliente_telefono ||
+                              reserva.telefono_cliente_manual) && (
+                              <a
+                                href={`tel:${
+                                  reserva.cliente_telefono ||
+                                  reserva.telefono_cliente_manual
+                                }`}
+                              >
                                 <i className="bi bi-telephone-fill"></i>
-                                {reserva.cliente_telefono}
+                                {reserva.cliente_telefono ||
+                                  reserva.telefono_cliente_manual}
                               </a>
                             )}
 
@@ -7205,8 +8342,17 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                           <div className="pdc-calendar-reservation-detail">
                             <p>{reserva.deporte}</p>
                             <small>{obtenerNombreVisibleReserva(reserva)}</small>
-                            {reserva.cliente_telefono && (
-                              <a href={`tel:${reserva.cliente_telefono}`}>{reserva.cliente_telefono}</a>
+                            {(reserva.cliente_telefono ||
+                              reserva.telefono_cliente_manual) && (
+                              <a
+                                href={`tel:${
+                                  reserva.cliente_telefono ||
+                                  reserva.telefono_cliente_manual
+                                }`}
+                              >
+                                {reserva.cliente_telefono ||
+                                  reserva.telefono_cliente_manual}
+                              </a>
                             )}
                           </div>
                         </div>
@@ -7260,6 +8406,10 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                         NOMBRES_DIAS_TURNO_FIJO[
                         Number(turno.dia_semana)
                         ] || 'Día';
+
+                      const procesando =
+                        String(procesandoTurnoFijoId) ===
+                        String(turno.id_turno_fijo);
 
                       return (
                         <div
@@ -7320,6 +8470,49 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                                 ? 'Cargado por el club'
                                 : 'Solicitado por usuario'}
                             </small>
+
+                            <button
+                              type="button"
+                              className="pdc-turno-fijo-cancel-btn"
+                              onClick={() =>
+                                handleFinalizarTurnoFijo(turno)
+                              }
+                              disabled={
+                                procesando ||
+                                cargandoTurnosFijos
+                              }
+                              style={{
+                                marginTop: '5px',
+                                padding: '7px 10px',
+                                fontSize: '12px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px',
+                                opacity:
+                                  procesando ||
+                                  cargandoTurnosFijos
+                                    ? 0.65
+                                    : 1,
+                                cursor:
+                                  procesando ||
+                                  cargandoTurnosFijos
+                                    ? 'not-allowed'
+                                    : 'pointer',
+                              }}
+                            >
+                              <i
+                                className={
+                                  procesando
+                                    ? 'bi bi-hourglass-split'
+                                    : 'bi bi-x-circle'
+                                }
+                              ></i>
+
+                              {procesando
+                                ? 'Cancelando...'
+                                : 'Cancelar'}
+                            </button>
                           </div>
                         </div>
                       );
