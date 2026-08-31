@@ -33,6 +33,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
   const [solicitandoBaja, setSolicitandoBaja] = useState(false);
   const [cancelandoReservaId, setCancelandoReservaId] = useState(null);
   const [reservasCanceladasLocal, setReservasCanceladasLocal] = useState([]);
+  const [reservasPagadasLocal, setReservasPagadasLocal] = useState([]);
 
   /*
     Reservas cargadas manualmente por el club durante esta sesión.
@@ -352,20 +353,20 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
             telefono_usuario: telefonoGuardado,
             ...(storedUser?.club
               ? {
-                  club: {
-                    ...storedUser.club,
-                    telefono_club: telefonoGuardado,
-                    ...(storedUser.club?.dueno
-                      ? {
-                          dueno: {
-                            ...storedUser.club.dueno,
-                            email_usuario: emailGuardado,
-                            telefono_usuario: telefonoGuardado,
-                          },
-                        }
-                      : {}),
-                  },
-                }
+                club: {
+                  ...storedUser.club,
+                  telefono_club: telefonoGuardado,
+                  ...(storedUser.club?.dueno
+                    ? {
+                      dueno: {
+                        ...storedUser.club.dueno,
+                        email_usuario: emailGuardado,
+                        telefono_usuario: telefonoGuardado,
+                      },
+                    }
+                    : {}),
+                },
+              }
               : {}),
           };
 
@@ -1604,7 +1605,7 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
     const nombreDia =
       NOMBRES_DIAS_TURNO_FIJO[
-        Number(turno.dia_semana)
+      Number(turno.dia_semana)
       ] || 'Día';
 
     const horaInicio =
@@ -4420,6 +4421,21 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
     return data;
   };
 
+  const reservaEstaPagadaClub = (reserva) => {
+    const idReserva = obtenerIdReserva(reserva);
+
+    if (
+      idReserva &&
+      reservasPagadasLocal.includes(String(idReserva))
+    ) {
+      return true;
+    }
+
+    return String(reserva?.estado_pago || '')
+      .trim()
+      .toLowerCase() === 'pagado';
+  };
+
   const handleRegistrarPagos = async (reserva) => {
     const idReserva = obtenerIdReserva(reserva);
 
@@ -4570,6 +4586,14 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
           },
         ]);
 
+        setReservasPagadasLocal((prev) => {
+          const clave = String(idReserva);
+
+          return prev.includes(clave)
+            ? prev
+            : [...prev, clave];
+        });
+
         await Swal.fire({
           icon: 'success',
           title: 'Cobro registrado',
@@ -4669,11 +4693,11 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
             const montoCentavos =
               reutilizarCobrosExistentes &&
-              cobroExistente?.monto !== undefined
+                cobroExistente?.monto !== undefined
                 ? Math.round(Number(cobroExistente.monto) * 100)
                 : index === cantidad - 1
                   ? totalCentavos -
-                    montoBaseCentavos * (cantidad - 1)
+                  montoBaseCentavos * (cantidad - 1)
                   : montoBaseCentavos;
 
             return {
@@ -4862,6 +4886,14 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
           idReserva,
           dividido.value
         );
+
+        setReservasPagadasLocal((prev) => {
+          const clave = String(idReserva);
+
+          return prev.includes(clave)
+            ? prev
+            : [...prev, clave];
+        });
 
         await Swal.fire({
           icon: 'success',
@@ -5328,8 +5360,8 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
         return `
           <option value="${cliente.id_usuario}">
             ${escaparHtmlTurnoFijo(
-              cliente.nombre + detalleTelefono
-            )}
+          cliente.nombre + detalleTelefono
+        )}
           </option>
         `;
       })
@@ -5352,10 +5384,10 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
         return `
           <option value="${idCancha}">
             ${escaparHtmlTurnoFijo(
-              deporte
-                ? `${nombre} · ${deporte}`
-                : nombre
-            )}
+          deporte
+            ? `${nombre} · ${deporte}`
+            : nombre
+        )}
           </option>
         `;
       })
@@ -5394,11 +5426,10 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
             class="swal2-select"
             style="display:block;width:100%;margin:0 0 12px;"
           >
-            ${
-              clientesRegistrados.length > 0
-                ? '<option value="registrado">Usuario registrado que ya reservó en el club</option>'
-                : ''
-            }
+            ${clientesRegistrados.length > 0
+          ? '<option value="registrado">Usuario registrado que ya reservó en el club</option>'
+          : ''
+        }
             <option value="externo">Cliente externo / sin cuenta</option>
           </select>
 
@@ -5687,15 +5718,15 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
             const configuraciones =
               configResponse.ok
                 ? await configResponse
-                    .json()
-                    .catch(() => [])
+                  .json()
+                  .catch(() => [])
                 : [];
 
             const ocupaciones =
               ocupacionesResponse.ok
                 ? await ocupacionesResponse
-                    .json()
-                    .catch(() => [])
+                  .json()
+                  .catch(() => [])
                 : [];
 
             if (!ocupacionesResponse.ok) {
@@ -5715,12 +5746,12 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
             const slotsConfigurados =
               Array.isArray(configuraciones) &&
-              configuraciones.length > 0
+                configuraciones.length > 0
                 ? configuraciones.filter(
-                    (slot) =>
-                      Number(slot.dia_semana) ===
-                      diaSemana
-                  )
+                  (slot) =>
+                    Number(slot.dia_semana) ===
+                    diaSemana
+                )
                 : generarSlotsDefault();
 
             const slotsLibres =
@@ -5822,14 +5853,12 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
 
             if (ayudaHorario) {
               ayudaHorario.textContent =
-                `${slotsLibres.length} horario${
-                  slotsLibres.length === 1
-                    ? ''
-                    : 's'
-                } disponible${
-                  slotsLibres.length === 1
-                    ? ''
-                    : 's'
+                `${slotsLibres.length} horario${slotsLibres.length === 1
+                  ? ''
+                  : 's'
+                } disponible${slotsLibres.length === 1
+                  ? ''
+                  : 's'
                 }.`;
             }
           } catch (error) {
@@ -6193,22 +6222,22 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
         html: `
           <p style="margin:0 0 6px;">
             <strong>${escaparHtmlTurnoFijo(
-              nuevaReservaVista.cliente_nombre
-            )}</strong>
+          nuevaReservaVista.cliente_nombre
+        )}</strong>
           </p>
 
           <p style="margin:0;">
             ${escaparHtmlTurnoFijo(
-              nuevaReservaVista.cancha
-            )} ·
+          nuevaReservaVista.cancha
+        )} ·
             ${escaparHtmlTurnoFijo(
-              formatearFecha(
-                nuevaReservaVista.fecha
-              )
-            )} ·
+          formatearFecha(
+            nuevaReservaVista.fecha
+          )
+        )} ·
             ${escaparHtmlTurnoFijo(
-              nuevaReservaVista.hora
-            )} hs
+          nuevaReservaVista.hora
+        )} hs
           </p>
         `,
         confirmButtonText: 'Aceptar',
@@ -6845,9 +6874,8 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
           </button>
 
           <div
-            className={`pdc-header-actions ${
-              menuMobileAbierto ? 'pdc-mobile-menu-open' : ''
-            }`}
+            className={`pdc-header-actions ${menuMobileAbierto ? 'pdc-mobile-menu-open' : ''
+              }`}
           >
             <button
               type="button"
@@ -8044,323 +8072,344 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
               </div>
             </section>
 
-              <section className="pdc-panel pdc-courts-panel">
-                <div className="pdc-panel-header">
-                  <h3>Canchas de tu club</h3>
-                </div>
+            <section className="pdc-panel pdc-courts-panel">
+              <div className="pdc-panel-header">
+                <h3>Canchas de tu club</h3>
+              </div>
 
-                <div className="pdc-courts-list">
-                  {canchasProcesadas.length === 0 ? (
-                    <p className="pdc-alert pdc-alert-info">No hay canchas cargadas.</p>
-                  ) : (
-                    canchasProcesadas.map((cancha) => (
-                      <div className="pdc-court-row" key={cancha.id_cancha}>
-                        <img
-                          src={cancha.img}
-                          alt={cancha.nombre_cancha}
-                          onError={(e) => {
-                            e.currentTarget.src =
-                              'https://images.unsplash.com/photo-1522778119026-d647f0596c20?w=500';
-                          }}
-                        />
+              <div className="pdc-courts-list">
+                {canchasProcesadas.length === 0 ? (
+                  <p className="pdc-alert pdc-alert-info">No hay canchas cargadas.</p>
+                ) : (
+                  canchasProcesadas.map((cancha) => (
+                    <div className="pdc-court-row" key={cancha.id_cancha}>
+                      <img
+                        src={cancha.img}
+                        alt={cancha.nombre_cancha}
+                        onError={(e) => {
+                          e.currentTarget.src =
+                            'https://images.unsplash.com/photo-1522778119026-d647f0596c20?w=500';
+                        }}
+                      />
 
-                        <div className="pdc-court-info">
-                          <h4>{cancha.nombre_cancha}</h4>
-                          <p>{cancha.deporte}</p>
-                          {(cancha.tipo_suelo || cancha.descripcion_cancha) && (
-                            <small>
-                              {[cancha.tipo_suelo, cancha.descripcion_cancha]
-                                .map((texto) => String(texto || '').trim())
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </small>
-                          )}
-                          <span>Activa</span>
-                        </div>
-
-                        {/* Precio por hora con botón de edición */}
-                        <div className="pdc-court-reservas">
-                          <p>Precio por turno</p>
-
-                          {editingCanchaId === cancha.id_cancha ? (
-                            <div className="pdc-price-editor">
-                              <input
-                                type="text"
-                                inputMode="numeric"
-                                value={editingPrice}
-                                onChange={handleEditingPriceChange}
-                                className="pdc-price-input"
-                                autoFocus
-                                placeholder="Ej: 40.000"
-                              />
-
-                              <button
-                                onClick={() => handleUpdatePrice(cancha.id_cancha)}
-                                className="pdc-btn-save-mini"
-                                title="Guardar"
-                              >
-                                <i className="bi bi-check"></i>
-                              </button>
-
-                              <button
-                                onClick={() => {
-                                  setEditingCanchaId(null);
-                                  setEditingPrice('');
-                                }}
-                                className="pdc-btn-cancel-mini"
-                                title="Cancelar"
-                              >
-                                <i className="bi bi-x"></i>
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="pdc-price-display">
-                              <strong>{formatMoney(cancha.precio_por_hora)}</strong>
-
-                              <button
-                                onClick={() => {
-                                  setEditingCanchaId(cancha.id_cancha);
-                                  setEditingPrice(formatPrice(normalizarImporteDesdeBackend(cancha.precio_por_hora || 0)));
-                                }}
-                                className="pdc-btn-edit-mini"
-                                title="Editar precio"
-                              >
-                                <i className="bi bi-pencil"></i>
-                              </button>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Reservas de hoy de cada cancha */}
-                        <div className="pdc-court-reservas">
-                          <p>Reservas hoy</p>
-                          <strong>{cancha.reservasHoy}</strong>
-                          <small>Próxima: {cancha.proxima}</small>
-                        </div>
-
+                      <div className="pdc-court-info">
+                        <h4>{cancha.nombre_cancha}</h4>
+                        <p>{cancha.deporte}</p>
+                        {(cancha.tipo_suelo || cancha.descripcion_cancha) && (
+                          <small>
+                            {[cancha.tipo_suelo, cancha.descripcion_cancha]
+                              .map((texto) => String(texto || '').trim())
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </small>
+                        )}
+                        <span>Activa</span>
                       </div>
-                    ))
-                  )}
-                </div>
-              </section>
+
+                      {/* Precio por hora con botón de edición */}
+                      <div className="pdc-court-reservas">
+                        <p>Precio por turno</p>
+
+                        {editingCanchaId === cancha.id_cancha ? (
+                          <div className="pdc-price-editor">
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              value={editingPrice}
+                              onChange={handleEditingPriceChange}
+                              className="pdc-price-input"
+                              autoFocus
+                              placeholder="Ej: 40.000"
+                            />
+
+                            <button
+                              onClick={() => handleUpdatePrice(cancha.id_cancha)}
+                              className="pdc-btn-save-mini"
+                              title="Guardar"
+                            >
+                              <i className="bi bi-check"></i>
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setEditingCanchaId(null);
+                                setEditingPrice('');
+                              }}
+                              className="pdc-btn-cancel-mini"
+                              title="Cancelar"
+                            >
+                              <i className="bi bi-x"></i>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="pdc-price-display">
+                            <strong>{formatMoney(cancha.precio_por_hora)}</strong>
+
+                            <button
+                              onClick={() => {
+                                setEditingCanchaId(cancha.id_cancha);
+                                setEditingPrice(formatPrice(normalizarImporteDesdeBackend(cancha.precio_por_hora || 0)));
+                              }}
+                              className="pdc-btn-edit-mini"
+                              title="Editar precio"
+                            >
+                              <i className="bi bi-pencil"></i>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Reservas de hoy de cada cancha */}
+                      <div className="pdc-court-reservas">
+                        <p>Reservas hoy</p>
+                        <strong>{cancha.reservasHoy}</strong>
+                        <small>Próxima: {cancha.proxima}</small>
+                      </div>
+
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
           </>
         )}
 
         {/* RESERVAS: gestión de próximas reservas y calendario */}
         {!showSettings && !showResumenMensual && seccionActiva === 'reservas' && (
-              <section className="pdc-panel pdc-upcoming-reservations-panel">
-                <div className="pdc-panel-header">
-                  <h3>Próximas reservas</h3>
+          <section className="pdc-panel pdc-upcoming-reservations-panel">
+            <div className="pdc-panel-header">
+              <h3>Próximas reservas</h3>
 
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'flex-end',
-                      gap: '10px',
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <button
-                      type="button"
-                      className="pdc-light-button"
-                      onClick={handleNuevaReservaManual}
-                      disabled={!canchas.length}
-                    >
-                      <i className="bi bi-plus-circle"></i>
-                      Nueva reserva
-                    </button>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'flex-end',
+                  gap: '10px',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <button
+                  type="button"
+                  className="pdc-light-button"
+                  onClick={handleNuevaReservaManual}
+                  disabled={!canchas.length}
+                >
+                  <i className="bi bi-plus-circle"></i>
+                  Nueva reserva
+                </button>
 
-                    <button
-                      type="button"
-                      className="pdc-light-button"
-                      onClick={() => setShowCalendar(!showCalendar)}
-                    >
-                      {showCalendar ? 'Ocultar calendario' : 'Ver calendario'}
-                      <i className="bi bi-calendar-event"></i>
-                    </button>
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  className="pdc-light-button"
+                  onClick={() => setShowCalendar(!showCalendar)}
+                >
+                  {showCalendar ? 'Ocultar calendario' : 'Ver calendario'}
+                  <i className="bi bi-calendar-event"></i>
+                </button>
+              </div>
+            </div>
 
-                {reservasProximas.length === 0 ? (
-                  <p className="pdc-alert pdc-alert-info">No hay próximas reservas.</p>
-                ) : (
-                  <div className="pdc-upcoming-reservations-list">
-                    {reservasProximas.map((reserva, index) => (
-                      <div className="pdc-reservation-row" key={obtenerIdReserva(reserva) || index}>
-                        <span>{reserva.hora}</span>
+            {reservasProximas.length === 0 ? (
+              <p className="pdc-alert pdc-alert-info">No hay próximas reservas.</p>
+            ) : (
+              <div className="pdc-upcoming-reservations-list">
+                {reservasProximas.map((reserva, index) => (
+                  <div className="pdc-reservation-row" key={obtenerIdReserva(reserva) || index}>
+                    <span>{reserva.hora}</span>
 
-                        <div className="pdc-reservation-info">
-                          <strong>{reserva.deporte}</strong>
-                          <p>{formatearFecha(reserva.fecha)} · {reserva.cancha}</p>
+                    <div className="pdc-reservation-info">
+                      <strong>{reserva.deporte}</strong>
+                      <p>{formatearFecha(reserva.fecha)} · {reserva.cancha}</p>
 
-                          <div className="pdc-reservation-client">
-                            <span>
-                              <i className="bi bi-person-fill"></i>
-                              {obtenerNombreVisibleReserva(reserva)}
-                            </span>
+                      <div className="pdc-reservation-client">
+                        <span>
+                          <i className="bi bi-person-fill"></i>
+                          {obtenerNombreVisibleReserva(reserva)}
+                        </span>
 
-                            {obtenerIdUsuarioReserva(reserva) && (
-                              <div
-                                style={{
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: '5px',
-                                }}
-                              >
-                                <button
-                                  type="button"
-                                  className="pdc-btn-edit-mini"
-                                  onClick={() => handleAlternarAliasReserva(reserva)}
-                                  disabled={
-                                    aliasProcesandoReservaId ===
+                        {obtenerIdUsuarioReserva(reserva) && (
+                          <div
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '5px',
+                            }}
+                          >
+                            <button
+                              type="button"
+                              className="pdc-btn-edit-mini"
+                              onClick={() => handleAlternarAliasReserva(reserva)}
+                              disabled={
+                                aliasProcesandoReservaId ===
+                                obtenerClaveAliasReserva(reserva)
+                              }
+                              title={
+                                reservasMostrandoAlias[
+                                  obtenerClaveAliasReserva(reserva)
+                                ]
+                                  ? 'Mostrar nombre y apellido'
+                                  : 'Mostrar alias interno'
+                              }
+                            >
+                              <i
+                                className={`bi ${aliasProcesandoReservaId ===
+                                  obtenerClaveAliasReserva(reserva)
+                                  ? 'bi-hourglass-split'
+                                  : reservasMostrandoAlias[
                                     obtenerClaveAliasReserva(reserva)
-                                  }
-                                  title={
-                                    reservasMostrandoAlias[
-                                      obtenerClaveAliasReserva(reserva)
-                                    ]
-                                      ? 'Mostrar nombre y apellido'
-                                      : 'Mostrar alias interno'
-                                  }
-                                >
-                                  <i
-                                    className={`bi ${
-                                      aliasProcesandoReservaId ===
-                                      obtenerClaveAliasReserva(reserva)
-                                        ? 'bi-hourglass-split'
-                                        : reservasMostrandoAlias[
-                                            obtenerClaveAliasReserva(reserva)
-                                          ]
-                                          ? 'bi-eye-slash'
-                                          : 'bi-eye'
-                                    }`}
-                                  ></i>
-                                </button>
-
-                                <button
-                                  type="button"
-                                  className="pdc-btn-edit-mini"
-                                  onClick={() => handleEditarAliasReserva(reserva)}
-                                  disabled={
-                                    aliasProcesandoReservaId ===
-                                    obtenerClaveAliasReserva(reserva)
-                                  }
-                                  title="Agregar o editar alias interno"
-                                >
-                                  <i className="bi bi-pencil"></i>
-                                </button>
-                              </div>
-                            )}
-
-                            {(reserva.cliente_telefono ||
-                              reserva.telefono_cliente_manual) && (
-                              <a
-                                href={`tel:${
-                                  reserva.cliente_telefono ||
-                                  reserva.telefono_cliente_manual
-                                }`}
-                              >
-                                <i className="bi bi-telephone-fill"></i>
-                                {reserva.cliente_telefono ||
-                                  reserva.telefono_cliente_manual}
-                              </a>
-                            )}
-
-                            {obtenerCancelacionesUsuario(reserva) > 0 && (
-                              <small
-                                className={`pdc-cancellation-count ${obtenerCancelacionesUsuario(reserva) >= 2 ? 'is-warning' : ''
+                                  ]
+                                    ? 'bi-eye-slash'
+                                    : 'bi-eye'
                                   }`}
-                                title="Cancelaciones registradas por este usuario en tu club"
-                              >
-                                {obtenerCancelacionesUsuario(reserva)} {
-                                  obtenerCancelacionesUsuario(reserva) === 1
-                                    ? 'cancelación previa'
-                                    : 'cancelaciones previas'
-                                }
-                              </small>
-                            )}
-                          </div>
-                        </div>
+                              ></i>
+                            </button>
 
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'flex-end',
-                            gap: '8px',
-                          }}
-                        >
-                          <small className="pdc-confirmed">
-                            {reserva.estado || 'Confirmada'}
+                            <button
+                              type="button"
+                              className="pdc-btn-edit-mini"
+                              onClick={() => handleEditarAliasReserva(reserva)}
+                              disabled={
+                                aliasProcesandoReservaId ===
+                                obtenerClaveAliasReserva(reserva)
+                              }
+                              title="Agregar o editar alias interno"
+                            >
+                              <i className="bi bi-pencil"></i>
+                            </button>
+                          </div>
+                        )}
+
+                        {(reserva.cliente_telefono ||
+                          reserva.telefono_cliente_manual) && (
+                            <a
+                              href={`tel:${reserva.cliente_telefono ||
+                                reserva.telefono_cliente_manual
+                                }`}
+                            >
+                              <i className="bi bi-telephone-fill"></i>
+                              {reserva.cliente_telefono ||
+                                reserva.telefono_cliente_manual}
+                            </a>
+                          )}
+
+                        {obtenerCancelacionesUsuario(reserva) > 0 && (
+                          <small
+                            className={`pdc-cancellation-count ${obtenerCancelacionesUsuario(reserva) >= 2 ? 'is-warning' : ''
+                              }`}
+                            title="Cancelaciones registradas por este usuario en tu club"
+                          >
+                            {obtenerCancelacionesUsuario(reserva)} {
+                              obtenerCancelacionesUsuario(reserva) === 1
+                                ? 'cancelación previa'
+                                : 'cancelaciones previas'
+                            }
                           </small>
+                        )}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'flex-end',
+                        gap: '8px',
+                      }}
+                    >
+                      <small className="pdc-confirmed">
+                        {reserva.estado || 'Confirmada'}
+                      </small>
+
+                      {reservaEstaPagadaClub(reserva) ? (
+                        <>
+                          <button
+                            type="button"
+                            className="pdc-light-button"
+                            disabled
+                            title="El pago de esta reserva ya fue registrado"
+                          >
+                            <i className="bi bi-check-circle-fill"></i>
+                            Pago registrado
+                          </button>
 
                           <button
                             type="button"
                             className="pdc-light-button"
                             onClick={() => handleRegistrarPagos(reserva)}
-                            title="Registrar o editar pagos de esta reserva"
+                            title="Modificar el pago registrado"
                           >
-                            <i className="bi bi-cash-coin"></i>
-                            Registrar pagos
+                            <i className="bi bi-pencil"></i>
+                            Editar pago
                           </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className="pdc-light-button"
+                          onClick={() => handleRegistrarPagos(reserva)}
+                          title="Registrar pagos de esta reserva"
+                        >
+                          <i className="bi bi-cash-coin"></i>
+                          Registrar pagos
+                        </button>
+                      )}
 
-                          <button
-                            type="button"
-                            className="pdc-cancel-reservation"
-                            onClick={() => handleCancelarReservaClub(reserva)}
-                            disabled={
-                              cancelandoReservaId === String(obtenerIdReserva(reserva))
-                            }
-                            title="Cancelar esta reserva"
-                          >
-                            {cancelandoReservaId === String(obtenerIdReserva(reserva))
-                              ? 'Cancelando...'
-                              : 'Cancelar'}
-                          </button>
-                        </div>
+                      <button
+                        type="button"
+                        className="pdc-cancel-reservation"
+                        onClick={() => handleCancelarReservaClub(reserva)}
+                        disabled={
+                          cancelandoReservaId === String(obtenerIdReserva(reserva))
+                        }
+                        title="Cancelar esta reserva"
+                      >
+                        {cancelandoReservaId === String(obtenerIdReserva(reserva))
+                          ? 'Cancelando...'
+                          : 'Cancelar'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Calendario simple desplegable */}
+            {showCalendar && (
+              <div className="pdc-calendar-preview">
+                <h4>Calendario de reservas</h4>
+
+                {reservasProximas.length === 0 ? (
+                  <p>No hay reservas cargadas en el calendario.</p>
+                ) : (
+                  reservasProximas.map((reserva, index) => (
+                    <div className="pdc-calendar-preview-item" key={obtenerIdReserva(reserva) || index}>
+                      <div>
+                        <strong>{formatearFecha(reserva.fecha)}</strong>
+                        <span>{reserva.hora}</span>
                       </div>
-                    ))}
-                  </div>
-                )}
 
-                {/* Calendario simple desplegable */}
-                {showCalendar && (
-                  <div className="pdc-calendar-preview">
-                    <h4>Calendario de reservas</h4>
-
-                    {reservasProximas.length === 0 ? (
-                      <p>No hay reservas cargadas en el calendario.</p>
-                    ) : (
-                      reservasProximas.map((reserva, index) => (
-                        <div className="pdc-calendar-preview-item" key={obtenerIdReserva(reserva) || index}>
-                          <div>
-                            <strong>{formatearFecha(reserva.fecha)}</strong>
-                            <span>{reserva.hora}</span>
-                          </div>
-
-                          <div className="pdc-calendar-reservation-detail">
-                            <p>{reserva.deporte}</p>
-                            <small>{obtenerNombreVisibleReserva(reserva)}</small>
-                            {(reserva.cliente_telefono ||
-                              reserva.telefono_cliente_manual) && (
-                              <a
-                                href={`tel:${
-                                  reserva.cliente_telefono ||
-                                  reserva.telefono_cliente_manual
+                      <div className="pdc-calendar-reservation-detail">
+                        <p>{reserva.deporte}</p>
+                        <small>{obtenerNombreVisibleReserva(reserva)}</small>
+                        {(reserva.cliente_telefono ||
+                          reserva.telefono_cliente_manual) && (
+                            <a
+                              href={`tel:${reserva.cliente_telefono ||
+                                reserva.telefono_cliente_manual
                                 }`}
-                              >
-                                {reserva.cliente_telefono ||
-                                  reserva.telefono_cliente_manual}
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
+                            >
+                              {reserva.cliente_telefono ||
+                                reserva.telefono_cliente_manual}
+                            </a>
+                          )}
+                      </div>
+                    </div>
+                  ))
                 )}
-              </section>
+              </div>
+            )}
+          </section>
         )}
 
         {/* TURNOS FIJOS: solicitudes, activos y alta manual */}
@@ -8491,12 +8540,12 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
                                 gap: '6px',
                                 opacity:
                                   procesando ||
-                                  cargandoTurnosFijos
+                                    cargandoTurnosFijos
                                     ? 0.65
                                     : 1,
                                 cursor:
                                   procesando ||
-                                  cargandoTurnosFijos
+                                    cargandoTurnosFijos
                                     ? 'not-allowed'
                                     : 'pointer',
                               }}
@@ -9522,17 +9571,21 @@ const PanelDelClub = ({ club, onLogout, reservas = [] }) => {
               </p>
 
               <div className="pdc-welcome-modal-box">
-                <h3>Primer paso recomendado</h3>
+                <h3>Antes de comenzar a recibir reservas</h3>
 
                 <p>
-                  Te sugerimos asignarle un <strong>precio por turno</strong> a los
-                  turnos de cada cancha o deporte. Esto es importante para que el
-                  sistema pueda calcular correctamente tus ingresos del día y del mes.
+                  Configurá el <strong>precio de cada una de tus canchas</strong> y
+                  revisá sus horarios disponibles.
                 </p>
 
                 <p>
-                  Si una cancha queda en <strong>$0</strong>, las reservas asociadas
-                  no van a reflejar ingresos reales en el dashboard.
+                  <strong>Importante:</strong> una cancha con precio en
+                  <strong> $0 no podrá recibir reservas</strong> hasta que le asignes
+                  un valor.
+                </p>
+
+                <p>
+                  Podés hacerlo ahora desde la sección <strong>Configuración</strong>.
                 </p>
               </div>
 
